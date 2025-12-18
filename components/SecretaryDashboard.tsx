@@ -5,7 +5,7 @@ import {
   Users, BookOpen, FileText, Plus, 
   Trash2, Search, Briefcase, GraduationCap, Edit3, X, Save,
   BarChart3, Calendar as CalendarIcon, ArrowLeft,
-  ChevronRight, LayoutDashboard, Phone, CreditCard, Sun, CheckCircle2, UserCheck, Camera, History, AlertCircle, MoveHorizontal, Trash, Bell, Mail, Link, Pencil, Calendar, Clock, ShieldCheck, ShieldAlert
+  ChevronRight, LayoutDashboard, Phone, CreditCard, Sun, CheckCircle2, UserCheck, Camera, History, AlertCircle, MoveHorizontal, Trash, Bell, Mail, Link, Pencil, Calendar, Clock, ShieldCheck, ShieldAlert, Filter, FileSpreadsheet, Download
 } from 'lucide-react';
 import { professores, turmas, alunos } from '../mockData';
 import { storageService } from '../services/storageService';
@@ -29,12 +29,14 @@ const SecretaryDashboard: React.FC = () => {
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEnrollListOpen, setIsEnrollListOpen] = useState(false);
   const [isLinkProfModalOpen, setIsLinkProfModalOpen] = useState(false);
+  const [isDailyViewOpen, setIsDailyViewOpen] = useState(false);
   
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editingVinculo, setEditingVinculo] = useState<{professorId: string, dataInicio: string} | null>(null);
   const [viewingProfessor, setViewingProfessor] = useState<Professor | null>(null);
   const [studentToTransfer, setStudentToTransfer] = useState<Aluno | null>(null);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
+  const [selectedDailyDate, setSelectedDailyDate] = useState<string | null>(null);
 
   const [repTurmaId, setRepTurmaId] = useState('');
   const [repMonth, setRepMonth] = useState(new Date().getMonth() + 1);
@@ -60,6 +62,10 @@ const SecretaryDashboard: React.FC = () => {
           setIsLinkProfModalOpen(false);
           setEditingVinculo(null);
         }
+        else if (isDailyViewOpen) {
+          if (selectedDailyDate) setSelectedDailyDate(null);
+          else setIsDailyViewOpen(false);
+        }
         else if (selectedTurmaId) setSelectedTurmaId(null);
         else if (activeTab !== 'geral') {
             setActiveTab('geral');
@@ -69,7 +75,7 @@ const SecretaryDashboard: React.FC = () => {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isModalOpen, isDetailModalOpen, isTransferModalOpen, isEnrollListOpen, isLinkProfModalOpen, selectedTurmaId, activeTab]);
+  }, [isModalOpen, isDetailModalOpen, isTransferModalOpen, isEnrollListOpen, isLinkProfModalOpen, isDailyViewOpen, selectedDailyDate, selectedTurmaId, activeTab]);
 
   const refreshData = () => {
     setProfs(storageService.getProfessors(professores));
@@ -188,14 +194,12 @@ const SecretaryDashboard: React.FC = () => {
       if (t.id === selectedTurmaId) {
         let newVinculos = t.vinculos || [];
         if (editingVinculo) {
-          // Atualizar vínculo existente
           newVinculos = newVinculos.map(v => 
             v.professorId === editingVinculo.professorId && v.dataInicio === editingVinculo.dataInicio 
             ? newVinculo 
             : v
           );
         } else {
-          // Adicionar novo vínculo
           newVinculos = [...newVinculos, newVinculo];
         }
         return { ...t, vinculos: newVinculos };
@@ -216,8 +220,6 @@ const SecretaryDashboard: React.FC = () => {
 
   const handleDeleteVinculo = (professorId: string, dataInicio: string, dataFim: string) => {
     if (!selectedTurmaId) return;
-    
-    // Verificar se existem registros de frequência para alunos desta turma no período do docente
     const alunoIdsDaTurma = students.filter(a => a.turmaId === selectedTurmaId).map(a => a.id);
     const registrosNoPeriodo = storageService.getFrequenciaPeriodo(dataInicio, dataFim);
     const temRegistros = registrosNoPeriodo.some(r => alunoIdsDaTurma.includes(r.alunoId));
@@ -281,6 +283,16 @@ const SecretaryDashboard: React.FC = () => {
     setStudentToTransfer(null);
   };
 
+  const registeredDatesForCurrentTurma = useMemo(() => {
+    if (!selectedTurmaId) return [];
+    return storageService.getDatasComFrequencia(selectedTurmaId, turmaAlunos.map(a => a.id));
+  }, [selectedTurmaId, turmaAlunos]);
+
+  const dailyFrequenciaData = useMemo(() => {
+    if (!selectedDailyDate || !selectedTurmaId) return [];
+    return storageService.getFrequencia(selectedDailyDate, selectedTurmaId);
+  }, [selectedDailyDate, selectedTurmaId]);
+
   return (
     <Layout userName="Secretaria Escolar">
       <div className="space-y-8 pb-20">
@@ -299,6 +311,12 @@ const SecretaryDashboard: React.FC = () => {
               
               <div className="flex items-center gap-3">
                 <button 
+                  onClick={() => setIsDailyViewOpen(true)}
+                  className="flex items-center gap-2 px-6 py-4 bg-indigo-50 text-indigo-600 rounded-3xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
+                >
+                  <History size={16} /> Ver Chamadas
+                </button>
+                <button 
                   onClick={() => { setActiveTab('turmas'); openModal(selectedTurma); }} 
                   className="p-4 bg-slate-50 text-indigo-500 rounded-[1.25rem] hover:bg-indigo-50 transition-all active:scale-90"
                   title="Editar Turma"
@@ -315,7 +333,7 @@ const SecretaryDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* SEÇÃO ALUNOS MATRICULADOS (PRIMEIRO) */}
+            {/* SEÇÃO ALUNOS MATRICULADOS */}
             <section className="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden p-2">
               <div className="p-10 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex items-center gap-4">
@@ -353,7 +371,7 @@ const SecretaryDashboard: React.FC = () => {
               </div>
             </section>
 
-            {/* SEÇÃO DOCENTES VINCULADOS (DEPOIS DOS ALUNOS) */}
+            {/* SEÇÃO DOCENTES VINCULADOS */}
             <section className="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden p-2">
               <div className="p-10 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex items-center gap-4">
@@ -397,16 +415,11 @@ const SecretaryDashboard: React.FC = () => {
                      </div>
                    );
                  })}
-                 {(selectedTurma.vinculos || []).length === 0 && (
-                   <div className="text-center py-10 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-100">
-                     <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum docente vinculado</p>
-                   </div>
-                 )}
               </div>
             </section>
           </div>
         ) : (
-          /* VIEW: ABAS GERAIS */
+          /* PAINEL PRINCIPAL E RELATÓRIOS */
           <div className="space-y-8 animate-in fade-in">
             <div className="flex items-center flex-wrap gap-4">
               <div className="flex overflow-x-auto gap-2 scrollbar-hide">
@@ -439,9 +452,9 @@ const SecretaryDashboard: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   {[
-                    { tab: 'turmas', icon: BookOpen, color: 'amber', label: 'Turma', sub: 'TURMAS', count: classes.length },
-                    { tab: 'alunos', icon: GraduationCap, color: 'purple', label: 'Alunos', sub: 'ALUNOS', count: students.length, alert: pendingCount },
-                    { tab: 'professores', icon: Briefcase, color: 'sky', label: 'Professor', sub: 'PROFESSORES', count: profs.length }
+                    { tab: 'turmas', icon: BookOpen, color: 'amber', label: 'Turmas', sub: 'ESTRUTURA', count: classes.length },
+                    { tab: 'alunos', icon: GraduationCap, color: 'purple', label: 'Alunos', sub: 'ESTUDANTES', count: students.length, alert: pendingCount },
+                    { tab: 'professores', icon: Briefcase, color: 'sky', label: 'Docentes', sub: 'CORPO DOCENTE', count: profs.length }
                   ].map((item) => (
                     <div key={item.tab} onClick={() => { setActiveTab(item.tab as any); setShowOnlyPending(false); }} className="group cursor-pointer bg-white p-10 rounded-[3.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all flex flex-col gap-6 active:scale-[0.98]">
                       <div className="flex items-center gap-5">
@@ -464,6 +477,99 @@ const SecretaryDashboard: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* ABA DE RELATÓRIOS */}
+            {activeTab === 'relatorios' && (
+              <div className="space-y-8 animate-in fade-in">
+                <div className="bg-white rounded-[3.5rem] p-10 shadow-sm border border-slate-200">
+                   <div className="flex flex-col md:flex-row gap-6 mb-10 items-end">
+                      <div className="flex-1 space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Selecione a Turma</label>
+                        <select value={repTurmaId} onChange={(e) => setRepTurmaId(e.target.value)} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner">
+                           <option value="">Escolha uma turma...</option>
+                           {classes.map(t => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                        </select>
+                      </div>
+                      <div className="w-full md:w-48 space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Mês</label>
+                        <select value={repMonth} onChange={(e) => setRepMonth(Number(e.target.value))} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner">
+                           {Array.from({length: 12}).map((_, i) => (
+                             <option key={i+1} value={i+1}>{new Date(2025, i).toLocaleString('pt-BR', {month: 'long'})}</option>
+                           ))}
+                        </select>
+                      </div>
+                      <div className="w-full md:w-40 space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Ano</label>
+                        <select value={repYear} onChange={(e) => setRepYear(Number(e.target.value))} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner">
+                           <option value={2024}>2024</option>
+                           <option value={2025}>2025</option>
+                        </select>
+                      </div>
+                   </div>
+
+                   {consolidatedReport ? (
+                     <div className="space-y-10">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                           <div className="bg-emerald-50 p-8 rounded-[2.5rem] border border-emerald-100">
+                              <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Presenças</p>
+                              <p className="text-4xl font-black text-emerald-700">{consolidatedReport.totals.presencas}</p>
+                           </div>
+                           <div className="bg-rose-50 p-8 rounded-[2.5rem] border border-rose-100">
+                              <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">Faltas</p>
+                              <p className="text-4xl font-black text-rose-700">{consolidatedReport.totals.faltas}</p>
+                           </div>
+                           <div className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-100">
+                              <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Justificativas</p>
+                              <p className="text-4xl font-black text-amber-700">{consolidatedReport.totals.justificadas}</p>
+                           </div>
+                           <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-100">
+                              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Registros</p>
+                              <p className="text-4xl font-black text-slate-700">{consolidatedReport.totals.total}</p>
+                           </div>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-[2rem] border border-slate-100">
+                           <table className="w-full text-left border-collapse">
+                              <thead className="bg-slate-50">
+                                 <tr>
+                                    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Aluno</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-emerald-500 uppercase tracking-widest text-center">P</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">F</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-amber-500 uppercase tracking-widest text-center">J</th>
+                                    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">% Pres.</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50">
+                                 {consolidatedReport.studentsData.map(student => {
+                                   const perc = student.total > 0 ? Math.round((student.presencas / student.total) * 100) : 0;
+                                   return (
+                                     <tr key={student.id} className="hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-8 py-5">
+                                           <div className="flex items-center gap-4">
+                                              <img src={student.fotoUrl} className="w-10 h-10 rounded-full border border-white shadow-sm" />
+                                              <p className="font-bold text-slate-700 text-sm uppercase">{student.nome}</p>
+                                           </div>
+                                        </td>
+                                        <td className="px-8 py-5 text-center font-black text-emerald-600">{student.presencas}</td>
+                                        <td className="px-8 py-5 text-center font-black text-rose-600">{student.faltas}</td>
+                                        <td className="px-8 py-5 text-center font-black text-amber-600">{student.justificadas}</td>
+                                        <td className="px-8 py-5 text-center font-black text-slate-500">{perc}%</td>
+                                     </tr>
+                                   );
+                                 })}
+                              </tbody>
+                           </table>
+                        </div>
+                     </div>
+                   ) : (
+                     <div className="py-20 text-center">
+                        <BarChart3 size={60} className="mx-auto text-slate-100 mb-6" />
+                        <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Selecione uma turma para gerar o relatório</p>
+                     </div>
+                   )}
                 </div>
               </div>
             )}
@@ -528,20 +634,10 @@ const SecretaryDashboard: React.FC = () => {
                                </div>
                              </div>
                              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                {activeTab === 'alunos' && !item.turmaId && (
-                                    <button onClick={(e) => { e.stopPropagation(); setStudentToTransfer(item); setIsTransferModalOpen(true); }} className="p-4 bg-white text-indigo-500 rounded-2xl shadow-sm hover:bg-indigo-600 hover:text-white transition-all">
-                                        <Link size={20} />
-                                    </button>
-                                )}
                                 <button onClick={(e) => { e.stopPropagation(); handleDelete(item.id, activeTab.slice(0, -1)); }} className="p-4 bg-white text-slate-200 hover:text-rose-500 rounded-2xl shadow-sm transition-all"><Trash2 size={20} /></button>
                              </div>
                           </div>
                         ))
-                      )}
-                      {((activeTab === 'professores' ? profs : students).filter(fuzzyFilter).length === 0) && (
-                        <div className="p-20 text-center">
-                            <p className="text-slate-300 font-black uppercase tracking-widest text-[10px]">Nenhum registro encontrado</p>
-                        </div>
                       )}
                    </div>
                 </div>
@@ -550,9 +646,78 @@ const SecretaryDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* MODAL VISUALIZAR FREQUÊNCIA DIÁRIA */}
+        {isDailyViewOpen && (
+           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+             <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden flex flex-col modal-animate-in max-h-[85vh]">
+                <div className="p-10 border-b border-slate-50 flex justify-between items-center shrink-0">
+                   <div>
+                      <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Histórico de Chamadas</h3>
+                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">{selectedTurma?.nome}</p>
+                   </div>
+                   <button onClick={() => { setIsDailyViewOpen(false); setSelectedDailyDate(null); }} className="p-4 bg-slate-50 text-slate-300 rounded-3xl active:scale-90"><X size={24} /></button>
+                </div>
+
+                {!selectedDailyDate ? (
+                  <div className="p-10 overflow-y-auto space-y-3">
+                    {registeredDatesForCurrentTurma.map(date => (
+                      <button 
+                        key={date}
+                        onClick={() => setSelectedDailyDate(date)}
+                        className="w-full flex items-center justify-between p-6 bg-slate-50 hover:bg-indigo-50 rounded-[2rem] border border-transparent hover:border-indigo-100 transition-all group"
+                      >
+                         <div className="flex items-center gap-5">
+                            <div className="p-3 bg-white text-indigo-500 rounded-2xl shadow-sm"><CalendarIcon size={20}/></div>
+                            <span className="font-black text-slate-700 uppercase tracking-widest text-sm">{date.split('-').reverse().join('/')}</span>
+                         </div>
+                         <ChevronRight className="text-slate-300 group-hover:translate-x-2 transition-transform" />
+                      </button>
+                    ))}
+                    {registeredDatesForCurrentTurma.length === 0 && (
+                      <div className="text-center py-20">
+                         <History size={48} className="mx-auto text-slate-100 mb-4" />
+                         <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum registro de frequência encontrado para esta turma</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    <div className="px-10 py-4 bg-indigo-50/50 flex items-center gap-4">
+                       <button onClick={() => setSelectedDailyDate(null)} className="p-2 text-indigo-600 hover:bg-white rounded-lg transition-all"><ArrowLeft size={18}/></button>
+                       <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Visualizando Dia: {selectedDailyDate.split('-').reverse().join('/')}</span>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-10 space-y-4">
+                       {turmaAlunos.map(aluno => {
+                         const record = dailyFrequenciaData.find(r => r.alunoId === aluno.id);
+                         return (
+                           <div key={aluno.id} className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-[2.5rem] shadow-sm">
+                              <div className="flex items-center gap-4">
+                                 <img src={aluno.fotoUrl} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
+                                 <p className="font-bold text-slate-700 uppercase text-xs">{aluno.nome}</p>
+                              </div>
+                              <div className={`px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                record?.status === AttendanceStatus.PRESENT ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                record?.status === AttendanceStatus.ABSENT ? 'bg-rose-50 text-rose-600 border-rose-100' :
+                                record?.status === AttendanceStatus.JUSTIFIED ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                'bg-slate-100 text-slate-400 border-slate-200'
+                              }`}>
+                                {record?.status === AttendanceStatus.PRESENT ? 'Presente' :
+                                 record?.status === AttendanceStatus.ABSENT ? 'Falta' :
+                                 record?.status === AttendanceStatus.JUSTIFIED ? 'Justificada' : 'N/A'}
+                              </div>
+                           </div>
+                         );
+                       })}
+                    </div>
+                  </div>
+                )}
+             </div>
+           </div>
+        )}
+
         {/* MODAL VINCULAR/EDITAR DOCENTE */}
         {isLinkProfModalOpen && (
-           <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+           <div className="fixed inset-0 z-[210] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
              <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
                <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
                   <div>
@@ -608,18 +773,17 @@ const SecretaryDashboard: React.FC = () => {
            </div>
         )}
 
-        {/* Modal Seleção de Alunos (Matrícula) */}
+        {/* Modal Seleção de Alunos */}
         {isEnrollListOpen && (
-            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+            <div className="fixed inset-0 z-[220] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
                 <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
                     <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
                         <div>
                             <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Estudante</h3>
-                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Alunos desvinculados de qualquer turma</p>
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Alunos desvinculados</p>
                         </div>
-                        <button onClick={() => setIsEnrollListOpen(false)} className="p-4 bg-slate-50 text-slate-300 rounded-3xl hover:text-rose-500 transition-all order-first md:order-last self-end md:self-center"><X size={24} /></button>
+                        <button onClick={() => setIsEnrollListOpen(false)} className="p-4 bg-slate-50 text-slate-300 rounded-3xl hover:text-rose-500 transition-all"><X size={24} /></button>
                     </div>
-                    
                     <div className="px-10 py-6 border-b border-slate-50">
                       <div className="relative">
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
@@ -631,14 +795,9 @@ const SecretaryDashboard: React.FC = () => {
                         />
                       </div>
                     </div>
-
                     <div className="p-8 max-h-[50vh] overflow-y-auto space-y-3">
                         {filteredEnrollList.map(aluno => (
-                            <button 
-                                key={aluno.id}
-                                onClick={() => handleEnrollExisting(aluno.id)}
-                                className="w-full flex items-center justify-between p-5 bg-slate-50 hover:bg-indigo-50 rounded-[2.5rem] border border-transparent hover:border-indigo-100 transition-all group"
-                            >
+                            <button key={aluno.id} onClick={() => handleEnrollExisting(aluno.id)} className="w-full flex items-center justify-between p-5 bg-slate-50 hover:bg-indigo-50 rounded-[2.5rem] border border-transparent hover:border-indigo-100 transition-all group">
                                 <div className="flex items-center gap-5">
                                     <img src={aluno.fotoUrl} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" />
                                     <div className="text-left">
@@ -651,50 +810,14 @@ const SecretaryDashboard: React.FC = () => {
                                 </div>
                             </button>
                         ))}
-                        {filteredEnrollList.length === 0 && (
-                          <div className="text-center py-16">
-                            <AlertCircle size={40} className="mx-auto text-slate-200 mb-4" />
-                            <p className="text-slate-300 font-black uppercase tracking-widest text-[10px]">
-                              Nenhum aluno desvinculado encontrado
-                            </p>
-                          </div>
-                        )}
-                    </div>
-                    <div className="p-8 bg-slate-50 text-center">
-                        <button onClick={() => { setIsEnrollListOpen(false); setActiveTab('alunos'); openModal(); }} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">+ Cadastrar novo aluno e vincular aqui</button>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* Modal de Transferência */}
-        {isTransferModalOpen && studentToTransfer && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
-              <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-                 <div>
-                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Estudante</h3>
-                    <p className="text-sm font-bold text-indigo-500 mt-1">{studentToTransfer.nome}</p>
-                 </div>
-                 <button onClick={() => setIsTransferModalOpen(false)} className="p-4 bg-white text-slate-300 rounded-3xl shadow-sm"><X size={24} /></button>
-              </div>
-              <form onSubmit={handleTransferSubmit} className="p-12 space-y-8">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Selecione a Turma de Destino</label>
-                    <select name="targetTurmaId" className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:border-indigo-100 transition-all appearance-none cursor-pointer">
-                        <option value="">Manter Desvinculado</option>
-                        {classes.map(t => <option key={t.id} value={t.id}>{t.nome} ({t.periodo})</option>)}
-                    </select>
-                 </div>
-                 <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black uppercase text-xs tracking-[0.2em] rounded-3xl shadow-xl shadow-indigo-100 active:scale-95 transition-all">Confirmar Matrícula</button>
-              </form>
-            </div>
-          </div>
-        )}
-
         {/* Modal de Cadastro/Edição Geral */}
         {isModalOpen && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
             <div className="bg-white w-full max-w-xl rounded-[4rem] shadow-2xl overflow-hidden border border-white p-1 modal-animate-in">
               <div className="p-12 pb-8 flex justify-between items-center border-b border-slate-50">
                 <div className="flex flex-col gap-1">
@@ -716,79 +839,28 @@ const SecretaryDashboard: React.FC = () => {
                     </div>
                  )}
                  <div className="space-y-6">
-                    {activeTab !== 'turmas' ? (
-                       <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Nome</label>
+                      <input name="nome" required defaultValue={editingItem?.nome} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
+                    </div>
+                    {activeTab === 'professores' && (
+                      <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Nome Completo</label>
-                          <input name="nome" required defaultValue={editingItem?.nome} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Matrícula</label>
+                            <input name="matricula" required defaultValue={editingItem?.matricula} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 shadow-inner" />
                         </div>
-                        {activeTab === 'professores' && (
-                          <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Email do Docente</label>
-                              <div className="relative">
-                                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                <input name="email" type="email" required defaultValue={editingItem?.email} className="w-full pl-14 pr-6 py-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
-                              </div>
-                          </div>
-                        )}
-                        {activeTab === 'alunos' && (
-                          <div className="space-y-2">
-                              <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Responsável</label>
-                              <input name="responsavel" required defaultValue={editingItem?.responsavel} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
-                          </div>
-                        )}
-                        {activeTab === 'professores' && (
-                          <div className="grid grid-cols-2 gap-6">
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Matrícula</label>
-                                <input name="matricula" required defaultValue={editingItem?.matricula} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-black text-slate-400 uppercase ml-4">WhatsApp</label>
-                                <input name="whatsapp" defaultValue={editingItem?.whatsapp} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
-                              </div>
-                          </div>
-                        )}
-                       </>
-                    ) : (
-                       <div className="space-y-6">
-                          <div className="space-y-2">
-                             <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Nome da Turma</label>
-                             <input name="nome" required defaultValue={editingItem?.nome} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white focus:border-indigo-100 transition-all shadow-inner" />
-                          </div>
-                          <div className="space-y-2">
-                             <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Período</label>
-                             <select name="periodo" defaultValue={editingItem?.periodo || 'Manhã'} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white transition-all shadow-inner appearance-none cursor-pointer">
-                                <option value="Manhã">Manhã</option>
-                                <option value="Tarde">Tarde</option>
-                                <option value="Integral">Integral</option>
-                             </select>
-                          </div>
-                       </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase ml-4">WhatsApp</label>
+                            <input name="whatsapp" defaultValue={editingItem?.whatsapp} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 shadow-inner" />
+                        </div>
+                      </div>
                     )}
                  </div>
                  <div className="pt-6 flex gap-4">
-                    <button type="button" onClick={closeModal} className="flex-1 py-5 bg-slate-50 text-slate-400 font-black uppercase text-[10px] rounded-3xl active:scale-95 transition-all hover:bg-slate-100">Cancelar</button>
-                    <button type="submit" className="flex-1 py-5 sky-gradient text-white font-black uppercase text-[10px] rounded-3xl shadow-xl shadow-blue-100 active:scale-95 transition-all">Salvar</button>
+                    <button type="button" onClick={closeModal} className="flex-1 py-5 bg-slate-50 text-slate-400 font-black uppercase text-[10px] rounded-3xl transition-all">Cancelar</button>
+                    <button type="submit" className="flex-1 py-5 sky-gradient text-white font-black uppercase text-[10px] rounded-3xl shadow-xl shadow-blue-100 transition-all">Salvar</button>
                  </div>
               </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Detalhes Professor */}
-        {isDetailModalOpen && viewingProfessor && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-            <div className="bg-white/95 w-full max-w-md rounded-[4rem] shadow-2xl overflow-hidden border border-white p-1 modal-animate-in">
-               <div className="p-12 flex flex-col items-center relative text-center">
-                  <button onClick={closeDetailModal} className="absolute top-8 right-8 p-4 bg-slate-50 text-slate-300 rounded-3xl hover:text-rose-500 transition-all"><X size={20}/></button>
-                  <div className="w-28 h-28 sky-gradient text-white rounded-[2.5rem] flex items-center justify-center text-5xl font-black mb-6 shadow-2xl">{viewingProfessor.nome.charAt(0)}</div>
-                  <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight leading-tight">{viewingProfessor.nome}</h3>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2 mb-8">Registro: {viewingProfessor.matricula}</p>
-                  <button onClick={() => { openModal(viewingProfessor); setIsDetailModalOpen(false); }} className="w-full py-5 sky-gradient text-white rounded-3xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-blue-100 active:scale-95 transition-all">
-                     <Edit3 size={18} /> Editar Cadastro
-                  </button>
-               </div>
             </div>
           </div>
         )}
