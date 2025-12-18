@@ -19,33 +19,33 @@ const Layout: React.FC<LayoutProps> = ({ children, userName }) => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="bg-white/70 backdrop-blur-md border-b border-white/50 px-6 py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('/dashboard')}>
+      <header className="bg-white/70 backdrop-blur-md border-b border-white/50 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-2 md:gap-3 cursor-pointer group" onClick={() => navigate('/dashboard')}>
           <div className="relative">
             <div className="absolute inset-0 bg-yellow-400 blur-md opacity-20 group-hover:opacity-40 transition-opacity"></div>
-            <div className="relative sun-gradient p-2.5 rounded-2xl text-white shadow-lg shadow-yellow-100 group-hover:rotate-12 transition-transform">
-              <Sun size={24} strokeWidth={3} />
+            <div className="relative sun-gradient p-2 md:p-2.5 rounded-xl md:rounded-2xl text-white shadow-lg shadow-yellow-100 group-hover:rotate-12 transition-transform">
+              <Sun size={20} className="md:w-6 md:h-6" strokeWidth={3} />
             </div>
           </div>
           <div className="flex flex-col">
-            <h1 className="text-xl font-black text-slate-800 leading-none tracking-tight">CMEI CLARA CAMARÃO</h1>
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 mt-1">Portal EducaFrequência</span>
+            <h1 className="text-lg md:text-xl font-black text-slate-800 leading-none tracking-tight">CMEI CLARA CAMARÃO</h1>
+            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.1em] md:tracking-[0.2em] text-indigo-500 mt-0.5 md:mt-1">Portal EducaFrequência</span>
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
           {userName && (
-            <div className="hidden md:flex flex-col items-end mr-2">
-              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Acesso Autorizado</span>
-              <span className="text-sm font-bold text-slate-700">{userName}</span>
+            <div className="hidden sm:flex flex-col items-end mr-2">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Acesso Autorizado</span>
+              <span className="text-xs md:text-sm font-bold text-slate-700">{userName.split(' ')[0]}</span>
             </div>
           )}
           <button 
             onClick={handleLogout}
-            className="p-3 bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all rounded-2xl active:scale-90"
+            className="p-2.5 md:p-3 bg-slate-50 text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all rounded-xl md:rounded-2xl active:scale-90"
             title="Sair do sistema"
           >
-            <LogOut size={20} />
+            <LogOut size={18} className="md:w-5 md:h-5" />
           </button>
         </div>
       </header>
@@ -54,8 +54,8 @@ const Layout: React.FC<LayoutProps> = ({ children, userName }) => {
         {children}
       </main>
 
-      <footer className="py-8 px-6 text-center">
-        <div className="flex items-center justify-center gap-2 text-slate-300 font-bold uppercase text-[10px] tracking-[0.3em]">
+      <footer className="py-6 md:py-8 px-6 text-center">
+        <div className="flex items-center justify-center gap-2 text-slate-300 font-bold uppercase text-[8px] md:text-[10px] tracking-[0.2em] md:tracking-[0.3em]">
           <span>CMEI Clara Camarão</span>
           <div className="w-1 h-1 bg-slate-200 rounded-full"></div>
           <span>Diário Digital v2.5</span>
