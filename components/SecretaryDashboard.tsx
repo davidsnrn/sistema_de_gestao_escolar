@@ -5,7 +5,7 @@ import {
   Users, UserPlus, BookOpen, FileText, Plus, 
   Trash2, Search, Briefcase, GraduationCap, Edit3, X, Save,
   BarChart3, Calendar as CalendarIcon, ArrowDownToLine, ArrowLeft,
-  ChevronRight, ChevronUp, ChevronDown
+  ChevronRight, ChevronUp, ChevronDown, Filter
 } from 'lucide-react';
 import { professores, turmas, alunos } from '../mockData';
 import { storageService } from '../services/storageService';
@@ -27,6 +27,11 @@ const SecretaryDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+
+  // Estados de Relatório
+  const [repTurmaId, setRepTurmaId] = useState('');
+  const [repMonth, setRepMonth] = useState(new Date().getMonth() + 1);
+  const [repYear, setRepYear] = useState(new Date().getFullYear());
 
   useEffect(() => {
     const { role } = storageService.getSession();
@@ -101,6 +106,38 @@ const SecretaryDashboard: React.FC = () => {
   const selectedTurma = useMemo(() => classes.find(t => t.id === selectedTurmaId), [selectedTurmaId, classes]);
   const turmaAlunos = useMemo(() => students.filter(a => a.turmaId === selectedTurmaId), [selectedTurmaId, students]);
   const linkedProfessor = useMemo(() => profs.find(p => p.id === selectedTurma?.professorId), [selectedTurma, profs]);
+
+  // Cálculo de Relatório Consolidado
+  const consolidatedReport = useMemo(() => {
+    if (!repTurmaId || !repMonth || !repYear) return null;
+
+    const turmaAlunosList = students.filter(a => a.turmaId === repTurmaId);
+    const startDate = `${repYear}-${String(repMonth).padStart(2, '0')}-01`;
+    const lastDay = new Date(repYear, repMonth, 0).getDate();
+    const endDate = `${repYear}-${String(repMonth).padStart(2, '0')}-${lastDay}`;
+    
+    const allFreq = storageService.getFrequenciaPeriodo(startDate, endDate);
+
+    const studentsData = turmaAlunosList.map(aluno => {
+      const records = allFreq.filter(f => f.alunoId === aluno.id);
+      return {
+        ...aluno,
+        presencas: records.filter(r => r.status === AttendanceStatus.PRESENT).length,
+        faltas: records.filter(r => r.status === AttendanceStatus.ABSENT).length,
+        justificadas: records.filter(r => r.status === AttendanceStatus.JUSTIFIED).length,
+        total: records.length
+      };
+    });
+
+    const totals = studentsData.reduce((acc, curr) => ({
+      presencas: acc.presencas + curr.presencas,
+      faltas: acc.faltas + curr.faltas,
+      justificadas: acc.justificadas + curr.justificadas,
+      total: acc.total + curr.total
+    }), { presencas: 0, faltas: 0, justificadas: 0, total: 0 });
+
+    return { studentsData, totals };
+  }, [repTurmaId, repMonth, repYear, students]);
 
   const getAttendanceForGrid = (alunoId: string, date: string) => {
     const all = storageService.getFrequencia(date);
@@ -197,7 +234,7 @@ const SecretaryDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Seção de Professores (Estilo Imagem Fornecida) */}
+          {/* Seção de Professores */}
           <div className="bg-white rounded-xl border border-teal-500 overflow-hidden shadow-sm">
             <div 
               className="p-4 bg-white border-b border-teal-500 flex justify-between items-center cursor-pointer"
@@ -264,7 +301,6 @@ const SecretaryDashboard: React.FC = () => {
     );
   }
 
-  // Dashboard Tab Views
   return (
     <Layout userName="Secretaria Escolar">
       <div className="space-y-8 pb-20">
@@ -382,6 +418,146 @@ const SecretaryDashboard: React.FC = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'relatorios' && (
+          <div className="space-y-6">
+            <div className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 text-indigo-600 rounded-xl"><BarChart3 size={24} /></div>
+                    Relatório Mensal de Frequência
+                  </h3>
+                  <p className="text-slate-400 text-sm font-medium mt-1">Consolidação de dados por turma e período letivo.</p>
+                </div>
+                <button className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">
+                  <ArrowDownToLine size={18} /> Exportar Completo
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-6 rounded-3xl border border-slate-100 mb-8">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
+                    <Filter size={10} /> Selecione a Turma
+                  </label>
+                  <select 
+                    value={repTurmaId}
+                    onChange={(e) => setRepTurmaId(e.target.value)}
+                    className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl outline-none font-bold text-slate-700 text-sm focus:ring-4 focus:ring-indigo-50 transition-all"
+                  >
+                    <option value="">-- Escolha uma turma --</option>
+                    {classes.map(c => <option key={c.id} value={c.id}>{c.nome} ({c.periodo})</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Mês</label>
+                  <select 
+                    value={repMonth}
+                    onChange={(e) => setRepMonth(Number(e.target.value))}
+                    className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl outline-none font-bold text-slate-700 text-sm"
+                  >
+                    {Array.from({length: 12}, (_, i) => (
+                      <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('pt-BR', {month: 'long'})}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Ano</label>
+                  <select 
+                    value={repYear}
+                    onChange={(e) => setRepYear(Number(e.target.value))}
+                    className="w-full p-3.5 bg-white border border-slate-200 rounded-2xl outline-none font-bold text-slate-700 text-sm"
+                  >
+                    {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {consolidatedReport && consolidatedReport.totals.total > 0 ? (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  {/* Cards de Resumo da Turma */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
+                      <p className="text-emerald-600 text-[10px] font-black uppercase tracking-widest mb-1">Presenças</p>
+                      <p className="text-3xl font-black text-emerald-700">{consolidatedReport.totals.presencas}</p>
+                    </div>
+                    <div className="p-6 bg-rose-50 rounded-3xl border border-rose-100">
+                      <p className="text-rose-600 text-[10px] font-black uppercase tracking-widest mb-1">Faltas</p>
+                      <p className="text-3xl font-black text-rose-700">{consolidatedReport.totals.faltas}</p>
+                    </div>
+                    <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100">
+                      <p className="text-amber-600 text-[10px] font-black uppercase tracking-widest mb-1">Justificadas</p>
+                      <p className="text-3xl font-black text-amber-700">{consolidatedReport.totals.justificadas}</p>
+                    </div>
+                    <div className="p-6 bg-indigo-600 rounded-3xl shadow-xl shadow-indigo-100">
+                      <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest mb-1">Assiduidade</p>
+                      <p className="text-3xl font-black text-white">
+                        {Math.round((consolidatedReport.totals.presencas / (consolidatedReport.totals.total - consolidatedReport.totals.justificadas)) * 100) || 0}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Listagem Detalhada por Aluno */}
+                  <div className="bg-white rounded-3xl border border-slate-100 shadow-inner overflow-hidden">
+                    <div className="p-6 bg-slate-50 border-b border-slate-100">
+                      <h4 className="text-sm font-black text-slate-700 uppercase tracking-widest">Desempenho por Aluno</h4>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                            <th className="px-6 py-4">Aluno</th>
+                            <th className="px-6 py-4 text-center">Presenças</th>
+                            <th className="px-6 py-4 text-center">Faltas</th>
+                            <th className="px-6 py-4 text-center">Justif.</th>
+                            <th className="px-6 py-4 text-right">Frequência %</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {consolidatedReport.studentsData.map((aluno) => {
+                            const perc = Math.round((aluno.presencas / (aluno.total - aluno.justificadas)) * 100) || 0;
+                            return (
+                              <tr key={aluno.id} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-3">
+                                    <img src={aluno.fotoUrl} className="w-8 h-8 rounded-full border border-slate-200" />
+                                    <span className="font-bold text-slate-700 text-sm">{aluno.nome}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-center text-sm font-bold text-emerald-600">{aluno.presencas}</td>
+                                <td className="px-6 py-4 text-center text-sm font-bold text-rose-600">{aluno.faltas}</td>
+                                <td className="px-6 py-4 text-center text-sm font-bold text-amber-600">{aluno.justificadas}</td>
+                                <td className="px-6 py-4 text-right">
+                                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-black ${
+                                    perc >= 90 ? 'bg-emerald-100 text-emerald-700' : 
+                                    perc >= 75 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                                  }`}>
+                                    {perc}%
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : repTurmaId ? (
+                <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                  <CalendarIcon size={48} className="mx-auto text-slate-300 mb-4" />
+                  <p className="text-slate-500 font-bold">Nenhum dado de frequência encontrado para esta turma em {new Date(repYear, repMonth-1).toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}.</p>
+                  <p className="text-slate-400 text-sm mt-1">Certifique-se de que os professores realizaram as chamadas no período.</p>
+                </div>
+              ) : (
+                <div className="text-center py-20 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200">
+                  <BarChart3 size={48} className="mx-auto text-slate-300 mb-4 opacity-20" />
+                  <p className="text-slate-400 font-bold italic uppercase tracking-widest text-xs">Selecione os filtros acima para gerar o relatório</p>
+                </div>
+              )}
             </div>
           </div>
         )}

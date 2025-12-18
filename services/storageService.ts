@@ -29,7 +29,23 @@ export const storageService = {
     const data = localStorage.getItem(FREQUENCY_KEY);
     if (!data) return [];
     const allRecords: Frequencia[] = JSON.parse(data);
+    // Nota: Se turmaId for passado, precisamos filtrar os alunos que pertencem a essa turma
+    // Mas os registros de frequência já contém o alunoId. 
+    // Para simplificar, retornamos todos daquela data e o componente filtra se necessário.
     return allRecords.filter(r => r.data === date);
+  },
+
+  getDatasComFrequencia: (turmaId: string, alunosDaTurmaIds: string[]): string[] => {
+    const data = localStorage.getItem(FREQUENCY_KEY);
+    if (!data) return [];
+    const allRecords: Frequencia[] = JSON.parse(data);
+    
+    // Filtra registros que pertencem aos alunos desta turma
+    const turmaRecords = allRecords.filter(r => alunosDaTurmaIds.includes(r.alunoId));
+    
+    // Retorna datas únicas ordenadas (mais recentes primeiro)
+    const dates = Array.from(new Set(turmaRecords.map(r => r.data)));
+    return dates.sort().reverse();
   },
 
   getFrequenciaPeriodo: (startDate: string, endDate: string): Frequencia[] => {

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Save, CheckCircle2, XCircle, AlertCircle, 
-  MessageSquare, Sparkles, Calendar as CalendarIcon, ChevronDown, ChevronUp
+  MessageSquare, Sparkles, Calendar as CalendarIcon, ChevronDown, ChevronUp, History,
+  Edit2
 } from 'lucide-react';
 import { turmas, alunos } from '../mockData';
 import { storageService } from '../services/storageService';
@@ -13,12 +14,14 @@ import { GoogleGenAI } from "@google/genai";
 
 const AttendanceScreen: React.FC = () => {
   const { turmaId } = useParams<{ turmaId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  
+  const initialDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  
   const [currentTurma] = useState(turmas.find(t => t.id === turmaId));
   const [turmaAlunos, setTurmaAlunos] = useState<Aluno[]>([]);
-  
-  const today = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(today);
   
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -33,7 +36,7 @@ const AttendanceScreen: React.FC = () => {
       return;
     }
 
-    const matchedAlunos = alunos.filter(a => a.turmaId === turmaId);
+    const matchedAlunos = storageService.getAlunos(alunos).filter(a => a.turmaId === turmaId);
     setTurmaAlunos(matchedAlunos);
 
     const initialAttendance: Record<string, AttendanceStatus> = {};
@@ -60,6 +63,11 @@ const AttendanceScreen: React.FC = () => {
     setExpandedNotes(prev => ({ ...prev, [alunoId]: !prev[alunoId] }));
   };
 
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    setSearchParams({ date: newDate });
+  };
+
   const saveAll = () => {
     setIsSaving(true);
     const records: Frequencia[] = turmaAlunos.map(aluno => ({
@@ -72,7 +80,7 @@ const AttendanceScreen: React.FC = () => {
     setTimeout(() => {
       storageService.saveFrequencia(records);
       setIsSaving(false);
-      alert(`Frequência de ${new Date(selectedDate).toLocaleDateString()} salva!`);
+      alert(`Frequência de ${new Date(selectedDate).toLocaleDateString()} salva com sucesso!`);
       navigate('/dashboard');
     }, 600);
   };
@@ -93,7 +101,7 @@ const AttendanceScreen: React.FC = () => {
         model: 'gemini-3-flash-preview',
         contents: `Gere uma observação curta de 1 frase para o diário escolar do aluno ${aluno.nome} que está com status "${statusLabel}" no dia ${selectedDate}.`,
         config: {
-          systemInstruction: "Você é uma professora gentil. Seja breve e profissional.",
+          systemInstruction: "Você é uma professora gentil de educação infantil. Seja breve, profissional e acolhedora.",
           temperature: 0.7
         }
       });
@@ -110,54 +118,72 @@ const AttendanceScreen: React.FC = () => {
 
   if (!currentTurma) return null;
 
+  const isEditing = storageService.getFrequencia(selectedDate, turmaId).length > 0;
+
   return (
     <Layout>
       <div className="space-y-6 pb-24 md:pb-8">
         {/* Header com Seletor de Data */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="p-2 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors">
-              <ArrowLeft size={20} className="text-slate-600" />
+            <button onClick={() => navigate('/dashboard')} className="p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors text-slate-600">
+              <ArrowLeft size={20} />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-slate-800">{currentTurma.nome}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">{currentTurma.nome}</h2>
+                {isEditing && (
+                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase rounded-full border border-indigo-100 flex items-center gap-1">
+                    <History size={10} /> Editando Registro
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-1">
                 <CalendarIcon size={14} className="text-indigo-500" />
                 <input 
                   type="date" 
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="text-sm font-bold text-slate-600 outline-none bg-transparent cursor-pointer hover:text-indigo-600"
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="text-xs font-black text-slate-500 outline-none bg-transparent cursor-pointer hover:text-indigo-600 uppercase tracking-widest"
                 />
               </div>
             </div>
           </div>
           
-          <button onClick={saveAll} disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50">
-            {isSaving ? 'Gravando...' : <><Save size={20} /> Salvar Frequência</>}
+          <button 
+            onClick={saveAll} 
+            disabled={isSaving} 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-widest py-4 px-8 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+          >
+            {isSaving ? 'Gravando...' : <><Save size={20} /> {isEditing ? 'Atualizar' : 'Finalizar'} Chamada</>}
           </button>
         </div>
 
-        {/* Lista de Alunos Simplificada */}
+        {/* Lista de Alunos */}
         <div className="space-y-3">
-          {turmaAlunos.map(aluno => (
-            <div key={aluno.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="p-4 flex flex-col sm:flex-row items-center gap-4">
+          {turmaAlunos.map((aluno, idx) => (
+            <div key={aluno.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden group hover:border-indigo-100 transition-colors">
+              <div className="p-5 flex flex-col sm:flex-row items-center gap-4">
                 {/* Info Aluno */}
-                <div className="flex items-center gap-3 flex-1 w-full">
-                  <img src={aluno.fotoUrl} alt={aluno.nome} className="w-12 h-12 rounded-full object-cover border-2 border-slate-50" />
+                <div className="flex items-center gap-4 flex-1 w-full">
+                  <div className="relative">
+                    <img src={aluno.fotoUrl} alt={aluno.nome} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md" />
+                    <span className="absolute -top-1 -left-1 w-6 h-6 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center text-[10px] font-black border-2 border-white">
+                      {idx + 1}
+                    </span>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-slate-800 truncate">{aluno.nome}</h4>
-                    <p className="text-[10px] text-slate-400 uppercase font-medium">{aluno.responsavel}</p>
+                    <h4 className="font-black text-slate-800 truncate text-lg tracking-tight">{aluno.nome}</h4>
+                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Responsável: {aluno.responsavel}</p>
                   </div>
                   
                   {/* Botão de Observação */}
                   <button 
                     onClick={() => toggleNote(aluno.id)}
-                    className={`p-2 rounded-xl transition-all ${notes[aluno.id] ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                    className={`p-3 rounded-2xl transition-all shadow-sm ${notes[aluno.id] ? 'bg-indigo-500 text-white' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
                     title="Adicionar Observação"
                   >
-                    <MessageSquare size={18} />
+                    <MessageSquare size={20} />
                   </button>
                 </div>
 
@@ -171,14 +197,14 @@ const AttendanceScreen: React.FC = () => {
                     <button
                       key={status.id}
                       onClick={() => handleStatusChange(aluno.id, status.id)}
-                      className={`flex-1 sm:flex-none sm:w-24 py-2 rounded-xl border flex items-center justify-center gap-2 transition-all ${
+                      className={`flex-1 sm:flex-none sm:w-28 py-3 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all ${
                         attendance[aluno.id] === status.id 
-                          ? `bg-${status.color}-50 border-${status.color}-500 text-${status.color}-600 font-bold` 
-                          : 'bg-white border-slate-100 text-slate-300'
+                          ? `bg-${status.color}-50 border-${status.color}-500 text-${status.color}-600 font-black shadow-inner` 
+                          : 'bg-white border-slate-50 text-slate-200 hover:border-slate-100'
                       }`}
                     >
-                      <status.icon size={16} />
-                      <span className="text-xs uppercase">{status.full}</span>
+                      <status.icon size={18} className={attendance[aluno.id] === status.id ? '' : 'opacity-30'} />
+                      <span className="text-[10px] uppercase font-black tracking-tighter">{status.full}</span>
                     </button>
                   ))}
                 </div>
@@ -186,30 +212,34 @@ const AttendanceScreen: React.FC = () => {
 
               {/* Área de Observação Expansível */}
               {expandedNotes[aluno.id] && (
-                <div className="px-4 pb-4 bg-slate-50 border-t border-slate-100 pt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Anotações do Professor</span>
+                <div className="px-5 pb-5 bg-slate-50 border-t border-slate-100 pt-4 animate-in slide-in-from-top-4 duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <Edit2 size={12} /> Observações Pedagógicas
+                    </span>
                     <button 
                       onClick={() => generateAiObservation(aluno)}
                       disabled={isAiLoading === aluno.id}
-                      className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg flex items-center gap-1 font-bold hover:bg-indigo-200 transition-colors"
+                      className="text-[10px] bg-white text-indigo-600 px-3 py-1.5 rounded-xl flex items-center gap-2 font-black uppercase tracking-widest hover:bg-indigo-50 transition-all border border-indigo-100 shadow-sm"
                     >
-                      {isAiLoading === aluno.id ? <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent animate-spin rounded-full"></div> : <Sparkles size={10} />}
+                      {isAiLoading === aluno.id ? <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent animate-spin rounded-full"></div> : <Sparkles size={12} />}
                       Sugerir com IA
                     </button>
                   </div>
                   <textarea 
                     value={notes[aluno.id] || ''}
                     onChange={(e) => setNotes(prev => ({...prev, [aluno.id]: e.target.value}))}
-                    placeholder="Escreva algo sobre o aluno hoje..."
-                    className="w-full h-20 p-3 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none shadow-inner"
+                    placeholder="Como foi o dia desta criança hoje? Cite comportamento, alimentação ou saúde..."
+                    className="w-full h-24 p-4 bg-white border border-slate-200 rounded-2xl text-sm focus:ring-4 focus:ring-indigo-50 outline-none transition-all resize-none shadow-sm font-medium"
                   />
-                  <button 
-                    onClick={() => toggleNote(aluno.id)}
-                    className="w-full mt-2 py-1 text-[10px] text-slate-400 font-bold uppercase hover:text-slate-600 transition-colors"
-                  >
-                    Fechar Observação
-                  </button>
+                  <div className="flex justify-end mt-2">
+                    <button 
+                      onClick={() => toggleNote(aluno.id)}
+                      className="px-4 py-1.5 text-[10px] text-slate-400 font-black uppercase hover:text-indigo-600 transition-colors"
+                    >
+                      Recolher Anotação
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
