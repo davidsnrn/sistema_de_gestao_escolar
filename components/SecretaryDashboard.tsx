@@ -5,7 +5,7 @@ import {
   Users, BookOpen, FileText, Plus, 
   Trash2, Search, Briefcase, GraduationCap, Edit3, X, Save,
   BarChart3, Calendar as CalendarIcon, ArrowLeft,
-  ChevronRight, LayoutDashboard, Phone, CreditCard, Sun, CheckCircle2, UserCheck, Camera, History, AlertCircle, MoveHorizontal, Trash, Bell, Mail, Link, Pencil
+  ChevronRight, LayoutDashboard, Phone, CreditCard, Sun, CheckCircle2, UserCheck, Camera, History, AlertCircle, MoveHorizontal, Trash, Bell, Mail, Link, Pencil, Calendar, Clock, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import { professores, turmas, alunos } from '../mockData';
 import { storageService } from '../services/storageService';
@@ -22,14 +22,16 @@ const SecretaryDashboard: React.FC = () => {
   const [classes, setClasses] = useState<Turma[]>([]);
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchEnroll, setSearchEnroll] = useState(''); // Pesquisa específica para o modal de matrícula
+  const [searchEnroll, setSearchEnroll] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isEnrollListOpen, setIsEnrollListOpen] = useState(false);
+  const [isLinkProfModalOpen, setIsLinkProfModalOpen] = useState(false);
   
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingVinculo, setEditingVinculo] = useState<{professorId: string, dataInicio: string} | null>(null);
   const [viewingProfessor, setViewingProfessor] = useState<Professor | null>(null);
   const [studentToTransfer, setStudentToTransfer] = useState<Aluno | null>(null);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
@@ -54,6 +56,10 @@ const SecretaryDashboard: React.FC = () => {
         else if (isDetailModalOpen) closeDetailModal();
         else if (isTransferModalOpen) setIsTransferModalOpen(false);
         else if (isEnrollListOpen) setIsEnrollListOpen(false);
+        else if (isLinkProfModalOpen) {
+          setIsLinkProfModalOpen(false);
+          setEditingVinculo(null);
+        }
         else if (selectedTurmaId) setSelectedTurmaId(null);
         else if (activeTab !== 'geral') {
             setActiveTab('geral');
@@ -63,7 +69,7 @@ const SecretaryDashboard: React.FC = () => {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isModalOpen, isDetailModalOpen, isTransferModalOpen, isEnrollListOpen, selectedTurmaId, activeTab]);
+  }, [isModalOpen, isDetailModalOpen, isTransferModalOpen, isEnrollListOpen, isLinkProfModalOpen, selectedTurmaId, activeTab]);
 
   const refreshData = () => {
     setProfs(storageService.getProfessors(professores));
@@ -167,6 +173,72 @@ const SecretaryDashboard: React.FC = () => {
     return pendingStudents.filter(a => a.nome.toLowerCase().includes(searchEnroll.toLowerCase()));
   }, [pendingStudents, searchEnroll]);
 
+  const handleLinkProfSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTurmaId) return;
+    const formData = new FormData(e.target as HTMLFormElement);
+    const newVinculo: ProfessorVinculo = {
+      professorId: formData.get('professorId') as string,
+      dataInicio: formData.get('dataInicio') as string,
+      dataFim: formData.get('dataFim') as string,
+      ativo: true
+    };
+
+    const updatedClasses = classes.map(t => {
+      if (t.id === selectedTurmaId) {
+        let newVinculos = t.vinculos || [];
+        if (editingVinculo) {
+          // Atualizar vínculo existente
+          newVinculos = newVinculos.map(v => 
+            v.professorId === editingVinculo.professorId && v.dataInicio === editingVinculo.dataInicio 
+            ? newVinculo 
+            : v
+          );
+        } else {
+          // Adicionar novo vínculo
+          newVinculos = [...newVinculos, newVinculo];
+        }
+        return { ...t, vinculos: newVinculos };
+      }
+      return t;
+    });
+
+    storageService.saveTurmas(updatedClasses);
+    refreshData();
+    setIsLinkProfModalOpen(false);
+    setEditingVinculo(null);
+  };
+
+  const handleEditVinculo = (vinculo: ProfessorVinculo) => {
+    setEditingVinculo({professorId: vinculo.professorId, dataInicio: vinculo.dataInicio});
+    setIsLinkProfModalOpen(true);
+  };
+
+  const handleDeleteVinculo = (professorId: string, dataInicio: string, dataFim: string) => {
+    if (!selectedTurmaId) return;
+    
+    // Verificar se existem registros de frequência para alunos desta turma no período do docente
+    const alunoIdsDaTurma = students.filter(a => a.turmaId === selectedTurmaId).map(a => a.id);
+    const registrosNoPeriodo = storageService.getFrequenciaPeriodo(dataInicio, dataFim);
+    const temRegistros = registrosNoPeriodo.some(r => alunoIdsDaTurma.includes(r.alunoId));
+
+    if (temRegistros) {
+      alert('Não é possível remover este docente. Já existem registros de frequência realizados para esta turma no período de sua atuação.');
+      return;
+    }
+
+    if (!confirm('Deseja remover este vínculo docente?')) return;
+    
+    const updatedClasses = classes.map(t => {
+      if (t.id === selectedTurmaId) {
+        return { ...t, vinculos: (t.vinculos || []).filter(v => v.professorId !== professorId || v.dataInicio !== dataInicio) };
+      }
+      return t;
+    });
+    storageService.saveTurmas(updatedClasses);
+    refreshData();
+  };
+
   const consolidatedReport = useMemo(() => {
     if (!repTurmaId) return null;
     const turmaAlunosList = students.filter(a => a.turmaId === repTurmaId);
@@ -243,17 +315,18 @@ const SecretaryDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* SEÇÃO ALUNOS MATRICULADOS (PRIMEIRO) */}
             <section className="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden p-2">
               <div className="p-10 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex items-center gap-4">
                   <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl"><Users size={28} /></div>
-                  <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Estudantes Matriculados</h3>
+                  <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Alunos Matriculados</h3>
                 </div>
                 <button 
                   onClick={() => { setIsEnrollListOpen(true); setSearchEnroll(''); }} 
                   className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 transition-all active:scale-95"
                 >
-                    <Plus size={16} /> Matricular Aluno Desvinculado
+                    <Plus size={16} /> Matricular Aluno
                 </button>
               </div>
               <div className="px-10 pb-10 space-y-4">
@@ -267,8 +340,8 @@ const SecretaryDashboard: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                      <button onClick={() => { setStudentToTransfer(aluno); setIsTransferModalOpen(true); }} className="p-4 bg-white text-slate-300 hover:text-indigo-600 rounded-2xl shadow-sm"><MoveHorizontal size={20}/></button>
-                      <button onClick={() => { if(confirm('Remover aluno desta turma?')) { storageService.saveAlunos(students.map(a => a.id === aluno.id ? {...a, turmaId: undefined} : a)); refreshData(); } }} className="p-4 bg-white text-slate-300 hover:text-rose-500 rounded-2xl shadow-sm"><Trash2 size={20}/></button>
+                      <button onClick={() => { setStudentToTransfer(aluno); setIsTransferModalOpen(true); }} className="p-4 bg-white text-slate-300 hover:text-indigo-600 rounded-2xl shadow-sm" title="Transferir Turma"><MoveHorizontal size={20}/></button>
+                      <button onClick={() => { if(confirm('Remover aluno desta turma?')) { storageService.saveAlunos(students.map(a => a.id === aluno.id ? {...a, turmaId: undefined} : a)); refreshData(); } }} className="p-4 bg-white text-slate-300 hover:text-rose-500 rounded-2xl shadow-sm" title="Remover Matrícula"><Trash2 size={20}/></button>
                     </div>
                   </div>
                 ))}
@@ -277,6 +350,58 @@ const SecretaryDashboard: React.FC = () => {
                     <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum aluno matriculado nesta turma</p>
                   </div>
                 )}
+              </div>
+            </section>
+
+            {/* SEÇÃO DOCENTES VINCULADOS (DEPOIS DOS ALUNOS) */}
+            <section className="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden p-2">
+              <div className="p-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl"><Briefcase size={28} /></div>
+                  <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Docentes Vinculados</h3>
+                </div>
+                <button 
+                  onClick={() => { setIsLinkProfModalOpen(true); setEditingVinculo(null); }} 
+                  className="w-full md:w-auto px-8 py-4 sun-gradient text-white rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-orange-100 flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                    <Plus size={16} /> Vincular Docente
+                </button>
+              </div>
+              <div className="px-10 pb-10 space-y-4">
+                 {(selectedTurma.vinculos || []).map(v => {
+                   const prof = profs.find(p => p.id === v.professorId);
+                   const isCurrentlyActive = new Date().toISOString().split('T')[0] >= v.dataInicio && new Date().toISOString().split('T')[0] <= v.dataFim;
+                   
+                   return (
+                     <div key={v.professorId + v.dataInicio} className="flex items-center justify-between p-6 bg-slate-50 rounded-[2.5rem] hover:bg-white border border-transparent hover:border-amber-100 transition-all group">
+                        <div className="flex items-center gap-5">
+                          <div className="w-14 h-14 bg-white text-amber-500 rounded-2xl flex items-center justify-center font-black text-xl shadow-sm border border-slate-100">{prof?.nome.charAt(0)}</div>
+                          <div>
+                            <div className="flex items-center gap-3">
+                                <p className="font-black text-slate-800 uppercase leading-none">{prof?.nome || 'Docente não encontrado'}</p>
+                                {isCurrentlyActive ? (
+                                    <span className="flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[8px] font-black uppercase tracking-widest border border-emerald-100"><ShieldCheck size={10}/> Ativo no Diário</span>
+                                ) : (
+                                    <span className="flex items-center gap-1 px-3 py-1 bg-slate-100 text-slate-400 rounded-full text-[8px] font-black uppercase tracking-widest border border-slate-200"><Clock size={10}/> Inativo</span>
+                                )}
+                            </div>
+                            <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-2 flex items-center gap-2">
+                               <Calendar size={12} /> Período: {v.dataInicio.split('-').reverse().join('/')} até {v.dataFim.split('-').reverse().join('/')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          <button onClick={() => handleEditVinculo(v)} className="p-4 bg-white text-slate-300 hover:text-indigo-600 rounded-2xl shadow-sm transition-all" title="Editar Período"><Pencil size={20}/></button>
+                          <button onClick={() => handleDeleteVinculo(v.professorId, v.dataInicio, v.dataFim)} className="p-4 bg-white text-slate-200 hover:text-rose-500 rounded-2xl shadow-sm transition-all" title="Remover Vínculo"><Trash2 size={20}/></button>
+                        </div>
+                     </div>
+                   );
+                 })}
+                 {(selectedTurma.vinculos || []).length === 0 && (
+                   <div className="text-center py-10 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-100">
+                     <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum docente vinculado</p>
+                   </div>
+                 )}
               </div>
             </section>
           </div>
@@ -396,7 +521,7 @@ const SecretaryDashboard: React.FC = () => {
                                <div>
                                   <p className="font-black text-slate-800 text-lg uppercase tracking-tight group-hover:text-indigo-600 transition-colors leading-none">{item.nome}</p>
                                   {!item.turmaId && activeTab === 'alunos' ? (
-                                    <p className="text-[10px] text-rose-500 font-black flex items-center gap-1 uppercase tracking-widest mt-1">Matrícula Pendente (Desvinculado)</p>
+                                    <p className="text-[10px] text-rose-500 font-black flex items-center gap-1 uppercase tracking-widest mt-1">Matrícula Pendente</p>
                                   ) : item.turmaId && activeTab === 'alunos' ? (
                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Turma: {classes.find(t => t.id === item.turmaId)?.nome}</p>
                                   ) : null}
@@ -425,9 +550,65 @@ const SecretaryDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* MODAIS COMPARTILHADOS */}
+        {/* MODAL VINCULAR/EDITAR DOCENTE */}
+        {isLinkProfModalOpen && (
+           <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+             <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
+               <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                  <div>
+                     <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
+                       {editingVinculo ? 'Editar Vínculo' : 'Vincular Docente'}
+                     </h3>
+                     <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mt-1">Defina o período de atuação</p>
+                  </div>
+                  <button onClick={() => { setIsLinkProfModalOpen(false); setEditingVinculo(null); }} className="p-4 bg-white text-slate-300 rounded-3xl shadow-sm"><X size={24} /></button>
+               </div>
+               <form onSubmit={handleLinkProfSubmit} className="p-12 space-y-6">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Docente</label>
+                     <select 
+                       name="professorId" 
+                       required 
+                       disabled={!!editingVinculo}
+                       defaultValue={editingVinculo?.professorId || ""}
+                       className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:border-amber-100 transition-all appearance-none cursor-pointer disabled:opacity-70"
+                     >
+                        <option value="">Escolha...</option>
+                        {profs.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                     </select>
+                     {editingVinculo && <input type="hidden" name="professorId" value={editingVinculo.professorId} />}
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Início</label>
+                       <input 
+                         type="date" 
+                         name="dataInicio" 
+                         required 
+                         defaultValue={editingVinculo ? selectedTurma?.vinculos?.find(v => v.professorId === editingVinculo.professorId && v.dataInicio === editingVinculo.dataInicio)?.dataInicio : ""}
+                         className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none" 
+                       />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Fim</label>
+                       <input 
+                         type="date" 
+                         name="dataFim" 
+                         required 
+                         defaultValue={editingVinculo ? selectedTurma?.vinculos?.find(v => v.professorId === editingVinculo.professorId && v.dataInicio === editingVinculo.dataInicio)?.dataFim : ""}
+                         className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none" 
+                       />
+                    </div>
+                  </div>
+                  <button type="submit" className="w-full py-6 sun-gradient text-white font-black uppercase text-xs tracking-[0.2em] rounded-3xl shadow-xl shadow-orange-100 active:scale-95 transition-all mt-4">
+                    {editingVinculo ? 'Atualizar Período' : 'Confirmar Vínculo'}
+                  </button>
+               </form>
+             </div>
+           </div>
+        )}
 
-        {/* Modal Seleção de Alunos Pendentes / Desvinculados (Usado dentro da View Turma) */}
+        {/* Modal Seleção de Alunos (Matrícula) */}
         {isEnrollListOpen && (
             <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
                 <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
@@ -443,7 +624,7 @@ const SecretaryDashboard: React.FC = () => {
                       <div className="relative">
                         <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                         <input 
-                            placeholder="Buscar aluno desvinculado..." 
+                            placeholder="Buscar aluno..." 
                             className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl outline-none font-bold text-slate-600 focus:bg-white transition-all" 
                             value={searchEnroll} 
                             onChange={(e) => setSearchEnroll(e.target.value)} 
@@ -474,7 +655,7 @@ const SecretaryDashboard: React.FC = () => {
                           <div className="text-center py-16">
                             <AlertCircle size={40} className="mx-auto text-slate-200 mb-4" />
                             <p className="text-slate-300 font-black uppercase tracking-widest text-[10px]">
-                              {searchEnroll ? 'Nenhum aluno desvinculado encontrado' : 'Não há alunos desvinculados disponíveis'}
+                              Nenhum aluno desvinculado encontrado
                             </p>
                           </div>
                         )}
@@ -486,7 +667,7 @@ const SecretaryDashboard: React.FC = () => {
             </div>
         )}
 
-        {/* Modal de Transferência / Vincular Direto */}
+        {/* Modal de Transferência */}
         {isTransferModalOpen && studentToTransfer && (
           <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
             <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
