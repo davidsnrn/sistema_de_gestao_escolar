@@ -28,18 +28,15 @@ const Dashboard: React.FC = () => {
     const prof = allProfs.find(p => p.id === userId);
     if (prof) {
       setProfessor(prof);
-      setProfessorTurmas(allTurmas.filter(t => t.professorId === userId));
+      // Filtra turmas onde o professor é o principal OU possui um vínculo na lista de vínculos
+      const filtered = allTurmas.filter(t => {
+        const isPrincipal = t.professorId === userId;
+        const hasVinculo = (t.vinculos || []).some(v => v.professorId === userId && v.ativo);
+        return isPrincipal || hasVinculo;
+      });
+      setProfessorTurmas(filtered);
     }
   }, [navigate]);
-
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-      }
-    };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, []);
 
   const getPeriodIcon = (periodo: string) => {
     switch (periodo) {
