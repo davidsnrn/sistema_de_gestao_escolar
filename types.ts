@@ -39,7 +39,7 @@ export interface Turma {
 export interface Aluno {
   id: string;
   nome: string;
-  turmaId: string;
+  turmaId?: string; // Agora opcional para permitir alunos sem turma
   responsavel: string;
   fotoUrl: string;
 }
