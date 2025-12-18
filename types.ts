@@ -39,9 +39,11 @@ export interface Turma {
 export interface Aluno {
   id: string;
   nome: string;
-  turmaId?: string; // Agora opcional para permitir alunos sem turma
+  turmaId?: string;
   responsavel: string;
+  telefoneResponsavel?: string;
   fotoUrl: string;
+  nee?: boolean; // Necessidades Educacionais Especiais
 }
 
 export interface Frequencia {

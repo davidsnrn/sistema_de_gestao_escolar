@@ -25,10 +25,10 @@ export const turmas: Turma[] = [
 ];
 
 export const alunos: Aluno[] = [
-  { id: 'A1', nome: 'Joãozinho Souza', turmaId: 'T1', responsavel: 'Maria Souza', fotoUrl: 'https://picsum.photos/seed/joao/100/100' },
-  { id: 'A2', nome: 'Maria Eduarda', turmaId: 'T1', responsavel: 'Carlos Lima', fotoUrl: 'https://picsum.photos/seed/maria/100/100' },
-  { id: 'A3', nome: 'Pedro Henrique', turmaId: 'T1', responsavel: 'Fernanda Rocha', fotoUrl: 'https://picsum.photos/seed/pedro/100/100' },
-  { id: 'A4', nome: 'Alice Silva', turmaId: 'T2', responsavel: 'Juliana Silva', fotoUrl: 'https://picsum.photos/seed/alice/100/100' },
-  { id: 'A5', nome: 'Lucas Gabriel', turmaId: 'T2', responsavel: 'Roberto Luz', fotoUrl: 'https://picsum.photos/seed/lucas/100/100' },
-  { id: 'A6', nome: 'Beatriz Martins', turmaId: 'T3', responsavel: 'Sandra Martins', fotoUrl: 'https://picsum.photos/seed/beatriz/100/100' }
+  { id: 'A1', nome: 'Joãozinho Souza', turmaId: 'T1', responsavel: 'Maria Souza', telefoneResponsavel: '11911112222', fotoUrl: 'https://picsum.photos/seed/joao/100/100', nee: false },
+  { id: 'A2', nome: 'Maria Eduarda', turmaId: 'T1', responsavel: 'Carlos Lima', telefoneResponsavel: '11922223333', fotoUrl: 'https://picsum.photos/seed/maria/100/100', nee: true },
+  { id: 'A3', nome: 'Pedro Henrique', turmaId: 'T1', responsavel: 'Fernanda Rocha', telefoneResponsavel: '11933334444', fotoUrl: 'https://picsum.photos/seed/pedro/100/100', nee: false },
+  { id: 'A4', nome: 'Alice Silva', turmaId: 'T2', responsavel: 'Juliana Silva', telefoneResponsavel: '11944445555', fotoUrl: 'https://picsum.photos/seed/alice/100/100', nee: false },
+  { id: 'A5', nome: 'Lucas Gabriel', turmaId: 'T2', responsavel: 'Roberto Luz', telefoneResponsavel: '11955556666', fotoUrl: 'https://picsum.photos/seed/lucas/100/100', nee: false },
+  { id: 'A6', nome: 'Beatriz Martins', turmaId: 'T3', responsavel: 'Sandra Martins', telefoneResponsavel: '11966667777', fotoUrl: 'https://picsum.photos/seed/beatriz/100/100', nee: true }
 ];
