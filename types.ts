@@ -9,8 +9,17 @@ export type UserRole = 'PROFESSOR' | 'SECRETARIO';
 
 export interface Professor {
   id: string;
+  matricula: string;
   nome: string;
-  email: string;
+  email?: string;
+  whatsapp?: string;
+}
+
+export interface ProfessorVinculo {
+  professorId: string;
+  ativo: boolean;
+  dataInicio: string;
+  dataFim: string;
 }
 
 export interface Secretario {
@@ -23,7 +32,8 @@ export interface Turma {
   id: string;
   nome: string;
   periodo: 'Manhã' | 'Tarde' | 'Integral';
-  professorId: string;
+  professorId: string; // Professor principal (legado/principal)
+  vinculos?: ProfessorVinculo[];
 }
 
 export interface Aluno {

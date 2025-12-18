@@ -4,17 +4,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EducaFrequência</title>
+    <title>EducaFrequência | CMEI Clara Camarão</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Quicksand', sans-serif;
-            background-color: #f8fafc;
+            background-color: #f0f4f8;
+            color: #334155;
         }
-        /* Custom scrollbar for better aesthetics */
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .sun-gradient {
+            background: linear-gradient(135deg, #FFD93D 0%, #FF8400 100%);
+        }
+
+        .sky-gradient {
+            background: linear-gradient(135deg, #4D96FF 0%, #0078AA 100%);
+        }
+
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
-          width: 8px;
+          width: 6px;
         }
         ::-webkit-scrollbar-track {
           background: #f1f5f9;
@@ -25,6 +42,15 @@
         }
         ::-webkit-scrollbar-thumb:hover {
           background: #94a3b8;
+        }
+
+        .modal-animate-in {
+          animation: modalShow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes modalShow {
+          from { opacity: 0; transform: scale(0.9) translateY(20px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
         }
     </style>
 <script type="importmap">

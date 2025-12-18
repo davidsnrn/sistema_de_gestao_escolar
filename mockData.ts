@@ -6,12 +6,20 @@ export const secretarios: Secretario[] = [
 ];
 
 export const professores: Professor[] = [
-  { id: '1', nome: 'Ana Silva', email: 'ana@escola.com' },
-  { id: '2', nome: 'Bia Oliveira', email: 'bia@escola.com' }
+  { id: '1', matricula: '2210561', nome: 'Sheyla Charlyse Rodrigues de Oliveira', email: 'sheyla@escola.com', whatsapp: '11999998888' },
+  { id: '2', matricula: '2024002', nome: 'Bia Oliveira', email: 'bia@escola.com', whatsapp: '11888887777' }
 ];
 
 export const turmas: Turma[] = [
-  { id: 'T1', nome: 'Maternal A', periodo: 'Manhã', professorId: '1' },
+  { 
+    id: 'T1', 
+    nome: 'Maternal A', 
+    periodo: 'Manhã', 
+    professorId: '1',
+    vinculos: [
+      { professorId: '1', ativo: true, dataInicio: '2025-09-09', dataFim: '2026-02-20' }
+    ]
+  },
   { id: 'T2', nome: 'Maternal B', periodo: 'Tarde', professorId: '1' },
   { id: 'T3', nome: 'Berçário II', periodo: 'Manhã', professorId: '2' }
 ];
