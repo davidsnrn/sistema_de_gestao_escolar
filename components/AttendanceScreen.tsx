@@ -4,11 +4,11 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ArrowLeft, Save, Sun, CloudRain, Heart, 
   MessageSquare, Sparkles, Calendar as CalendarIcon, History,
-  Edit2, X, AlertTriangle, RotateCcw, CheckCircle2, Lock
+  Edit2, X, RotateCcw, CheckCircle2, Lock, Plus, Users, ChevronRight
 } from 'lucide-react';
-import { turmas, alunos, professores } from '../mockData';
+import { turmas, alunos } from '../mockData';
 import { storageService } from '../services/storageService';
-import { Aluno, AttendanceStatus, Frequencia, Turma, Professor } from '../types';
+import { Aluno, AttendanceStatus, Frequencia } from '../types';
 import Layout from './Layout';
 import { GoogleGenAI } from "@google/genai";
 
@@ -17,11 +17,12 @@ const AttendanceScreen: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  const initialDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [isMarking, setIsMarking] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   
   const [currentTurma] = useState(storageService.getTurmas(turmas).find(t => t.id === turmaId));
   const [turmaAlunos, setTurmaAlunos] = useState<Aluno[]>([]);
+  const [registeredDates, setRegisteredDates] = useState<string[]>([]);
   
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -35,31 +36,35 @@ const AttendanceScreen: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState<string | null>(null);
 
-  // Lógica de Período de Posse
+  // Período de Posse
   const isWithinTenure = useMemo(() => {
     const { userId } = storageService.getSession();
     if (!currentTurma || !userId) return false;
-    
-    // Procura o vínculo do professor logado nesta turma
     const vinculo = (currentTurma.vinculos || []).find(v => v.professorId === userId);
-    if (!vinculo) return false; // Se não tem vínculo, não pode editar nada
-
-    // Verifica se a data selecionada está dentro do período do vínculo
+    if (!vinculo) return false;
     return selectedDate >= vinculo.dataInicio && selectedDate <= vinculo.dataFim && vinculo.ativo;
   }, [currentTurma, selectedDate]);
 
-  const loadData = useCallback(() => {
+  const loadTurmaData = useCallback(() => {
     if (!turmaId) return;
-
     const matchedAlunos = storageService.getAlunos(alunos).filter(a => a.turmaId === turmaId);
     setTurmaAlunos(matchedAlunos);
+    const dates = storageService.getDatasComFrequencia(turmaId, matchedAlunos.map(a => a.id));
+    setRegisteredDates(dates);
+  }, [turmaId]);
+
+  useEffect(() => {
+    loadTurmaData();
+  }, [loadTurmaData]);
+
+  const loadAttendance = useCallback(() => {
+    if (!turmaId || !isMarking) return;
 
     const initialAttendance: Record<string, AttendanceStatus> = {};
     const initialNotes: Record<string, string> = {};
-    
     const existing = storageService.getFrequencia(selectedDate, turmaId);
     
-    matchedAlunos.forEach(aluno => {
+    turmaAlunos.forEach(aluno => {
       const record = existing.find(r => r.alunoId === aluno.id);
       initialAttendance[aluno.id] = record?.status || AttendanceStatus.PRESENT;
       initialNotes[aluno.id] = record?.observacao || '';
@@ -69,46 +74,33 @@ const AttendanceScreen: React.FC = () => {
     setNotes(initialNotes);
     setOriginalAttendance({...initialAttendance});
     setOriginalNotes({...initialNotes});
-    
     setIsLockedByRecord(existing.length > 0);
-  }, [turmaId, selectedDate]);
+  }, [turmaId, selectedDate, isMarking, turmaAlunos]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadAttendance();
+  }, [loadAttendance]);
+
+  // ESC Navigation
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isMarking) {
+          setIsMarking(false);
+          loadTurmaData();
+        } else {
+          navigate('/dashboard');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isMarking, navigate, loadTurmaData]);
 
   const handleStatusChange = (alunoId: string, status: AttendanceStatus) => {
     if (isLockedByRecord || !isWithinTenure) return;
     setAttendance(prev => ({ ...prev, [alunoId]: status }));
-    if (status === AttendanceStatus.JUSTIFIED) {
-      setExpandedNotes(prev => ({ ...prev, [alunoId]: true }));
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setAttendance({...originalAttendance});
-    setNotes({...originalNotes});
-    setIsLockedByRecord(true);
-    setExpandedNotes({});
-  };
-
-  const validateAndSave = () => {
-    if (!isWithinTenure) {
-        alert("Você não possui permissão para registrar frequência nesta data (fora do seu período de posse).");
-        return;
-    }
-
-    const missingJustification = turmaAlunos.find(a => 
-      attendance[a.id] === AttendanceStatus.JUSTIFIED && !notes[a.id]?.trim()
-    );
-
-    if (missingJustification) {
-      alert(`Ops! Precisamos saber o motivo da falta justificade de ${missingJustification.nome}.`);
-      setExpandedNotes(prev => ({ ...prev, [missingJustification.id]: true }));
-      return;
-    }
-
-    setShowConfirmModal(true);
+    if (status === AttendanceStatus.JUSTIFIED) setExpandedNotes(prev => ({ ...prev, [alunoId]: true }));
   };
 
   const confirmSave = () => {
@@ -127,7 +119,19 @@ const AttendanceScreen: React.FC = () => {
       setIsLockedByRecord(true);
       setOriginalAttendance({...attendance});
       setOriginalNotes({...notes});
+      setIsMarking(false);
+      loadTurmaData();
     }, 600);
+  };
+
+  const startNewFrequency = () => {
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+    setIsMarking(true);
+  };
+
+  const editHistory = (date: string) => {
+    setSelectedDate(date);
+    setIsMarking(true);
   };
 
   const generateAiObservation = async (aluno: Aluno) => {
@@ -135,16 +139,11 @@ const AttendanceScreen: React.FC = () => {
     setIsAiLoading(aluno.id);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const statusLabel = attendance[aluno.id] === AttendanceStatus.PRESENT ? 'Presente' : 
-                          attendance[aluno.id] === AttendanceStatus.ABSENT ? 'Faltou' : 'Justificou';
-      
+      const statusLabel = attendance[aluno.id] === AttendanceStatus.PRESENT ? 'Presente' : 'Faltou';
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Gere uma observação pedagógica curta e gentil para ${aluno.nome} que está com status "${statusLabel}" hoje.`,
-        config: {
-          systemInstruction: "Você é uma professora gentil de Maternal no CMEI Clara Camarão.",
-          temperature: 0.7
-        }
+        contents: `Gere uma observação pedagógica curta para ${aluno.nome} status ${statusLabel}.`,
+        config: { systemInstruction: "Gentil e profissional.", temperature: 0.7 }
       });
       if (response.text) setNotes(prev => ({ ...prev, [aluno.id]: response.text.trim() }));
     } catch (err) { console.error(err); } finally { setIsAiLoading(null); }
@@ -152,39 +151,103 @@ const AttendanceScreen: React.FC = () => {
 
   if (!currentTurma) return null;
 
+  // VIEW: LISTAGEM DE ALUNOS E DIAS REGISTRADOS
+  if (!isMarking) {
+    return (
+      <Layout>
+        <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center justify-between bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
+            <div className="flex items-center gap-5">
+              <button onClick={() => navigate('/dashboard')} className="p-4 bg-slate-50 text-slate-400 hover:text-indigo-600 rounded-3xl active:scale-90 transition-all"><ArrowLeft size={20} /></button>
+              <div>
+                <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight leading-none">{currentTurma.nome}</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">{currentTurma.periodo} • Diário de Classe</p>
+              </div>
+            </div>
+            <button 
+              onClick={startNewFrequency}
+              className="px-10 py-5 sky-gradient text-white rounded-3xl font-black uppercase text-xs tracking-widest flex items-center gap-3 shadow-xl shadow-blue-100 hover:opacity-90 active:scale-95 transition-all"
+            >
+              <Plus size={20} strokeWidth={3} /> Adicionar Frequência
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Alunos */}
+            <div className="lg:col-span-2 space-y-6">
+               <div className="bg-white p-10 rounded-[4rem] border border-slate-200 shadow-sm p-2">
+                 <div className="flex items-center gap-4 mb-8 px-8 pt-8">
+                    <div className="p-4 bg-indigo-50 text-indigo-600 rounded-[1.5rem]"><Users size={28} /></div>
+                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Estudantes</h3>
+                 </div>
+                 <div className="px-8 pb-8 space-y-4">
+                    {turmaAlunos.map(aluno => (
+                      <div key={aluno.id} className="flex items-center gap-5 p-6 bg-slate-50 rounded-[2.5rem] border border-transparent hover:bg-white hover:border-slate-100 transition-all">
+                        <img src={aluno.fotoUrl || 'https://via.placeholder.com/100'} className="w-16 h-16 rounded-3xl object-cover border-4 border-white shadow-md" />
+                        <div>
+                          <p className="font-black text-slate-800 text-lg uppercase leading-tight">{aluno.nome}</p>
+                          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Responsável: {aluno.responsavel}</p>
+                        </div>
+                      </div>
+                    ))}
+                 </div>
+               </div>
+            </div>
+
+            {/* Dias Registrados */}
+            <div className="space-y-6">
+              <div className="bg-white p-10 rounded-[4rem] border border-slate-200 shadow-sm p-2">
+                 <div className="flex items-center gap-4 mb-8 px-8 pt-8">
+                    <div className="p-4 bg-amber-50 text-amber-600 rounded-[1.5rem]"><History size={28} /></div>
+                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Histórico</h3>
+                 </div>
+                 <div className="px-8 pb-8 space-y-3">
+                    {registeredDates.map(date => (
+                      <button 
+                        key={date}
+                        onClick={() => editHistory(date)}
+                        className="w-full flex items-center justify-between p-5 bg-slate-50 hover:bg-white border border-transparent hover:border-slate-100 rounded-3xl transition-all group"
+                      >
+                        <div className="flex items-center gap-3">
+                           <CalendarIcon size={18} className="text-slate-400 group-hover:text-indigo-500" />
+                           <span className="font-bold text-slate-600">{new Date(date).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <ChevronRight size={18} className="text-slate-300 group-hover:translate-x-1" />
+                      </button>
+                    ))}
+                    {registeredDates.length === 0 && (
+                      <div className="text-center py-10 text-slate-300 font-black uppercase tracking-widest text-[9px]">Nenhum registro encontrado</div>
+                    )}
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // VIEW: MARCAÇÃO DE FREQUÊNCIA
   return (
     <Layout>
-      <div className="space-y-6 pb-24 md:pb-8">
+      <div className="space-y-6 pb-24 md:pb-8 animate-in zoom-in-95 duration-300">
         {!isWithinTenure && (
-            <div className="bg-rose-50 border border-rose-200 p-6 rounded-[2.5rem] flex items-center gap-4 text-rose-700 font-bold animate-pulse">
-                <div className="p-3 bg-white rounded-2xl shadow-sm text-rose-500"><Lock size={24} /></div>
-                <p>Atenção: A data selecionada está fora do seu período de posse vinculado a esta turma. Edição bloqueada.</p>
+            <div className="bg-rose-50 border border-rose-200 p-6 rounded-[2.5rem] flex items-center gap-4 text-rose-700 font-bold">
+                <Lock size={24} />
+                <p>Atenção: Data fora do período de posse. Registro bloqueado.</p>
             </div>
         )}
 
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[3rem] shadow-sm border border-slate-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[3rem] shadow-sm border border-slate-100">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/dashboard')} className="p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all text-slate-400 active:scale-90">
-              <ArrowLeft size={20} />
-            </button>
+            <button onClick={() => setIsMarking(false)} className="p-4 bg-slate-50 text-slate-400 rounded-2xl"><X size={20} /></button>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase leading-none">{currentTurma.nome}</h2>
-                {isLockedByRecord && (
-                  <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-full border border-emerald-100 flex items-center gap-1">
-                    <History size={10} /> Registro Gravado
-                  </span>
-                )}
-              </div>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase leading-none">{isLockedByRecord ? 'Editar' : 'Novo'} Registro</h2>
               <div className="flex items-center gap-2 mt-2">
-                <div className="p-1 bg-blue-50 text-blue-500 rounded-md"><CalendarIcon size={12} /></div>
                 <input 
                   type="date" 
                   value={selectedDate}
-                  onChange={(e) => {
-                    setSelectedDate(e.target.value);
-                    navigate(`/chamada/${turmaId}?date=${e.target.value}`);
-                  }}
+                  onChange={(e) => setSelectedDate(e.target.value)}
                   className="text-xs font-black text-slate-400 outline-none bg-transparent cursor-pointer hover:text-indigo-600 uppercase tracking-widest"
                 />
               </div>
@@ -194,28 +257,9 @@ const AttendanceScreen: React.FC = () => {
           <div className="flex gap-2">
             {isWithinTenure && (
                 isLockedByRecord ? (
-                    <button 
-                      onClick={() => setIsLockedByRecord(false)}
-                      className="bg-white border-2 border-indigo-600 text-indigo-600 font-black uppercase text-[10px] tracking-widest py-4.5 px-10 rounded-3xl flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all shadow-sm active:scale-95"
-                    >
-                      <Edit2 size={16} /> Reabrir Edição
-                    </button>
-                  ) : (
-                    <>
-                      <button 
-                        onClick={handleCancelEdit}
-                        className="bg-slate-100 text-slate-400 font-black uppercase text-[10px] tracking-widest py-4.5 px-8 rounded-3xl flex items-center justify-center gap-2 hover:bg-slate-200 transition-all"
-                      >
-                        <RotateCcw size={16} /> Descartar
-                      </button>
-                      <button 
-                        onClick={validateAndSave} 
-                        disabled={isSaving} 
-                        className="sky-gradient hover:opacity-90 text-white font-black uppercase text-[10px] tracking-widest py-4.5 px-10 rounded-3xl flex items-center justify-center gap-2 shadow-xl shadow-blue-100 transition-all active:scale-95"
-                      >
-                        <Save size={18} /> Salvar Chamada
-                      </button>
-                    </>
+                    <button onClick={() => setIsLockedByRecord(false)} className="bg-white border-2 border-indigo-600 text-indigo-600 font-black uppercase text-[10px] tracking-widest py-4 px-10 rounded-3xl shadow-sm">Editar Agora</button>
+                ) : (
+                    <button onClick={() => setShowConfirmModal(true)} className="sky-gradient text-white font-black uppercase text-[10px] tracking-widest py-4 px-10 rounded-3xl shadow-xl shadow-blue-100">Gravar Tudo</button>
                 )
             )}
           </div>
@@ -223,28 +267,16 @@ const AttendanceScreen: React.FC = () => {
 
         <div className="space-y-4">
           {turmaAlunos.map((aluno, idx) => (
-            <div key={aluno.id} className={`bg-white rounded-[3rem] border transition-all ${isLockedByRecord || !isWithinTenure ? 'opacity-90 border-slate-100 bg-slate-50/20' : 'hover:border-indigo-100 border-slate-200 shadow-sm'}`}>
+            <div key={aluno.id} className={`bg-white rounded-[3rem] border transition-all ${isLockedByRecord || !isWithinTenure ? 'opacity-90 border-slate-100' : 'hover:border-indigo-100 shadow-sm border-slate-200'}`}>
               <div className="p-6 flex flex-col sm:flex-row items-center gap-5">
                 <div className="flex items-center gap-5 flex-1 w-full">
                   <div className="relative">
-                    <img src={aluno.fotoUrl || 'https://via.placeholder.com/100'} alt={aluno.nome} className="w-16 h-16 rounded-3xl object-cover border-4 border-white shadow-xl" />
-                    <span className="absolute -top-2 -left-2 w-8 h-8 sun-gradient text-white rounded-2xl flex items-center justify-center text-xs font-black border-2 border-white shadow-md">
-                      {idx + 1}
-                    </span>
+                    <img src={aluno.fotoUrl || 'https://via.placeholder.com/100'} className="w-16 h-16 rounded-3xl object-cover border-4 border-white shadow-xl" />
+                    <span className="absolute -top-2 -left-2 w-8 h-8 sun-gradient text-white rounded-2xl flex items-center justify-center text-xs font-black">{idx + 1}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-slate-800 truncate text-xl tracking-tight leading-tight uppercase">{aluno.nome}</h4>
-                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-0.5">Responsável: {aluno.responsavel}</p>
-                  </div>
-                  
-                  <button 
-                    onClick={() => setExpandedNotes(prev => ({ ...prev, [aluno.id]: !prev[aluno.id] }))}
-                    className={`p-4 rounded-2xl transition-all ${notes[aluno.id] ? 'sky-gradient text-white shadow-lg' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
-                  >
-                    <MessageSquare size={22} />
-                  </button>
+                  <div className="flex-1"><h4 className="font-black text-slate-800 text-lg uppercase leading-tight">{aluno.nome}</h4></div>
+                  <button onClick={() => setExpandedNotes(prev => ({ ...prev, [aluno.id]: !prev[aluno.id] }))} className={`p-4 rounded-2xl transition-all ${notes[aluno.id] ? 'sky-gradient text-white' : 'bg-slate-50 text-slate-300'}`}><MessageSquare size={22} /></button>
                 </div>
-
                 <div className="flex gap-2.5 w-full sm:w-auto">
                   {[
                     { id: AttendanceStatus.PRESENT, icon: Sun, label: 'Presente', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-500' },
@@ -255,44 +287,22 @@ const AttendanceScreen: React.FC = () => {
                       key={status.id}
                       disabled={isLockedByRecord || !isWithinTenure}
                       onClick={() => handleStatusChange(aluno.id, status.id)}
-                      className={`flex-1 sm:flex-none sm:w-28 py-5 rounded-3xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${
-                        attendance[aluno.id] === status.id 
-                          ? `${status.bg} ${status.border} ${status.text} font-black shadow-inner` 
-                          : 'bg-white border-slate-50 text-slate-300 opacity-30'
-                      } ${(isLockedByRecord || !isWithinTenure) ? 'cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                      className={`flex-1 sm:w-28 py-5 rounded-3xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all ${attendance[aluno.id] === status.id ? `${status.bg} ${status.border} ${status.text} font-black` : 'bg-white border-slate-50 text-slate-300 opacity-30'}`}
                     >
-                      <status.icon size={26} strokeWidth={attendance[aluno.id] === status.id ? 3 : 2} />
+                      <status.icon size={26} strokeWidth={3} />
                       <span className="text-[9px] uppercase font-black tracking-widest">{status.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
-
               {expandedNotes[aluno.id] && (
-                <div className="px-8 pb-8 bg-slate-50/50 border-t border-slate-100/50 pt-6 animate-in slide-in-from-top-2 duration-300 rounded-b-[3rem]">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      {attendance[aluno.id] === AttendanceStatus.JUSTIFIED ? '✨ JUSTIFICATIVA OBRIGATÓRIA' : '📝 NOTAS PEDAGÓGICAS'}
-                    </span>
-                    {isWithinTenure && !isLockedByRecord && (
-                      <button 
-                        onClick={() => generateAiObservation(aluno)}
-                        disabled={isAiLoading === aluno.id}
-                        className="text-[10px] bg-white text-indigo-600 px-5 py-2.5 rounded-2xl flex items-center gap-2 font-black uppercase tracking-widest hover:bg-indigo-50 transition-all border border-indigo-100 shadow-sm active:scale-95"
-                      >
-                        {isAiLoading === aluno.id ? <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent animate-spin rounded-full"></div> : <Sparkles size={14} />}
-                        Sugerir IA
-                      </button>
-                    )}
-                  </div>
+                <div className="px-8 pb-8 bg-slate-50/50 pt-6 rounded-b-[3rem]">
                   <textarea 
                     disabled={isLockedByRecord || !isWithinTenure}
                     value={notes[aluno.id] || ''}
                     onChange={(e) => setNotes(prev => ({...prev, [aluno.id]: e.target.value}))}
-                    placeholder={attendance[aluno.id] === AttendanceStatus.JUSTIFIED ? "Relate o motivo aqui..." : "Descreva o desenvolvimento do aluno hoje..."}
-                    className={`w-full h-32 p-6 bg-white border-2 rounded-[2rem] text-sm outline-none transition-all resize-none shadow-inner font-medium ${
-                      attendance[aluno.id] === AttendanceStatus.JUSTIFIED && !notes[aluno.id] ? 'border-rose-300 ring-4 ring-rose-50' : 'border-slate-100 focus:border-indigo-300'
-                    }`}
+                    className="w-full h-32 p-6 bg-white border-2 rounded-[2rem] text-sm outline-none shadow-inner"
+                    placeholder="Notas pedagógicas..."
                   />
                 </div>
               )}
@@ -303,31 +313,18 @@ const AttendanceScreen: React.FC = () => {
         {showConfirmModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in duration-300">
             <div className="bg-white w-full max-sm rounded-[4rem] p-12 shadow-2xl border border-white text-center modal-animate-in">
-              <div className="w-24 h-24 sky-gradient text-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-blue-100">
+              <div className="w-24 h-24 sky-gradient text-white rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl">
                 <CheckCircle2 size={48} strokeWidth={3} />
               </div>
-              <h3 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">Tudo pronto?</h3>
-              <p className="text-slate-500 text-sm mb-10 leading-relaxed font-medium">Os registros de frequência para o dia <b>{new Date(selectedDate).toLocaleDateString('pt-BR')}</b> serão atualizados.</p>
-              
+              <h3 className="text-3xl font-black text-slate-800 mb-8 tracking-tight">Salvar Chamada?</h3>
               <div className="flex flex-col gap-4">
-                <button 
-                  onClick={confirmSave}
-                  className="w-full sky-gradient text-white py-5 rounded-3xl font-black uppercase text-xs tracking-widest hover:opacity-90 transition-all shadow-xl shadow-blue-100 active:scale-95"
-                >
-                  Sim, Salvar Registro
-                </button>
-                <button 
-                  onClick={() => setShowConfirmModal(false)}
-                  className="w-full bg-slate-50 text-slate-400 py-5 rounded-3xl font-black uppercase text-xs tracking-widest hover:bg-slate-100 transition-all active:scale-95"
-                >
-                  Voltar e Revisar
-                </button>
+                <button onClick={confirmSave} className="w-full sky-gradient text-white py-5 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Sim, Salvar</button>
+                <button onClick={() => setShowConfirmModal(false)} className="w-full bg-slate-100 text-slate-400 py-5 rounded-3xl font-black uppercase text-xs tracking-widest">Revisar</button>
               </div>
             </div>
           </div>
         )}
       </div>
-      <style>{`.py-4\\.5 { padding-top: 1.125rem; padding-bottom: 1.125rem; }`}</style>
     </Layout>
   );
 };
