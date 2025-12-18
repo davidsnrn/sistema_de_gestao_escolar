@@ -22,6 +22,8 @@ const SecretaryDashboard: React.FC = () => {
   const [classes, setClasses] = useState<Turma[]>([]);
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchEnroll, setSearchEnroll] = useState(''); // Pesquisa específica para o modal de matrícula
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -118,9 +120,7 @@ const SecretaryDashboard: React.FC = () => {
     } else if (type === 'aluno') {
       storageService.saveAlunos(students.filter(a => a.id !== id));
     } else if (type === 'turma') {
-      // Exclui a turma
       storageService.saveTurmas(classes.filter(t => t.id !== id));
-      // REQUISITO: Desvincular todos os alunos da turma excluída
       const updatedStudents = students.map(aluno => 
         aluno.turmaId === id ? { ...aluno, turmaId: undefined } : aluno
       );
@@ -142,6 +142,7 @@ const SecretaryDashboard: React.FC = () => {
     storageService.saveAlunos(newStudents);
     refreshData();
     setIsEnrollListOpen(false);
+    setSearchEnroll('');
   };
 
   const handleNotificationClick = () => {
@@ -160,6 +161,11 @@ const SecretaryDashboard: React.FC = () => {
 
   const selectedTurma = useMemo(() => classes.find(t => t.id === selectedTurmaId), [selectedTurmaId, classes]);
   const turmaAlunos = useMemo(() => students.filter(a => a.turmaId === selectedTurmaId), [selectedTurmaId, students]);
+
+  const filteredEnrollList = useMemo(() => {
+    if (!searchEnroll) return pendingStudents;
+    return pendingStudents.filter(a => a.nome.toLowerCase().includes(searchEnroll.toLowerCase()));
+  }, [pendingStudents, searchEnroll]);
 
   const consolidatedReport = useMemo(() => {
     if (!repTurmaId) return null;
@@ -207,7 +213,7 @@ const SecretaryDashboard: React.FC = () => {
     <Layout userName="Secretaria Escolar">
       <div className="space-y-8 pb-20">
         
-        {/* VIEW: DETALHES TURMA (Condicional para permitir modais) */}
+        {/* VIEW: DETALHES TURMA */}
         {selectedTurmaId && selectedTurma ? (
           <div className="space-y-8 animate-in fade-in">
             <div className="flex items-center justify-between bg-white p-6 rounded-[3rem] border border-slate-100 shadow-sm">
@@ -223,12 +229,14 @@ const SecretaryDashboard: React.FC = () => {
                 <button 
                   onClick={() => { setActiveTab('turmas'); openModal(selectedTurma); }} 
                   className="p-4 bg-slate-50 text-indigo-500 rounded-[1.25rem] hover:bg-indigo-50 transition-all active:scale-90"
+                  title="Editar Turma"
                 >
                   <Pencil size={24} />
                 </button>
                 <button 
                   onClick={() => handleDelete(selectedTurma.id, 'turma')} 
                   className="p-4 bg-white text-rose-500 rounded-[1.25rem] border-2 border-slate-900 hover:bg-rose-50 transition-all active:scale-90"
+                  title="Excluir Turma"
                 >
                   <Trash2 size={24} />
                 </button>
@@ -236,13 +244,16 @@ const SecretaryDashboard: React.FC = () => {
             </div>
 
             <section className="bg-white rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden p-2">
-              <div className="p-10 flex justify-between items-center">
+              <div className="p-10 flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="flex items-center gap-4">
                   <div className="p-4 bg-indigo-50 text-indigo-600 rounded-2xl"><Users size={28} /></div>
                   <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Estudantes Matriculados</h3>
                 </div>
-                <button onClick={() => setIsEnrollListOpen(true)} className="px-8 py-4 bg-indigo-600 text-white rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center gap-2 transition-all active:scale-95">
-                    <Plus size={16} /> Matricular Aluno
+                <button 
+                  onClick={() => { setIsEnrollListOpen(true); setSearchEnroll(''); }} 
+                  className="w-full md:w-auto px-8 py-4 bg-indigo-600 text-white rounded-3xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-100 flex items-center justify-center gap-2 transition-all active:scale-95"
+                >
+                    <Plus size={16} /> Matricular Aluno Desvinculado
                 </button>
               </div>
               <div className="px-10 pb-10 space-y-4">
@@ -263,7 +274,7 @@ const SecretaryDashboard: React.FC = () => {
                 ))}
                 {turmaAlunos.length === 0 && (
                   <div className="text-center py-20 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-100">
-                    <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum aluno matriculado</p>
+                    <p className="text-slate-300 font-black uppercase tracking-widest text-xs">Nenhum aluno matriculado nesta turma</p>
                   </div>
                 )}
               </div>
@@ -385,7 +396,7 @@ const SecretaryDashboard: React.FC = () => {
                                <div>
                                   <p className="font-black text-slate-800 text-lg uppercase tracking-tight group-hover:text-indigo-600 transition-colors leading-none">{item.nome}</p>
                                   {!item.turmaId && activeTab === 'alunos' ? (
-                                    <p className="text-[10px] text-rose-500 font-black flex items-center gap-1 uppercase tracking-widest mt-1">Matrícula Pendente</p>
+                                    <p className="text-[10px] text-rose-500 font-black flex items-center gap-1 uppercase tracking-widest mt-1">Matrícula Pendente (Desvinculado)</p>
                                   ) : item.turmaId && activeTab === 'alunos' ? (
                                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Turma: {classes.find(t => t.id === item.turmaId)?.nome}</p>
                                   ) : null}
@@ -411,83 +422,94 @@ const SecretaryDashboard: React.FC = () => {
                 </div>
               </div>
             )}
-
-            {activeTab === 'relatorios' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                  <div className="bg-white p-12 rounded-[4rem] border border-slate-200 shadow-sm overflow-hidden">
-                    <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tight mb-10 flex items-center gap-4">
-                        <BarChart3 className="text-amber-500" size={32} /> Relatório de Frequência
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-8 rounded-[3rem] border border-slate-100 mb-10 shadow-inner">
-                        <select value={repTurmaId} onChange={(e) => setRepTurmaId(e.target.value)} className="p-5 bg-white border-2 border-white rounded-[1.5rem] font-bold text-slate-700 outline-none focus:border-indigo-100 transition-all">
-                          <option value="">Selecione a turma...</option>
-                          {classes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                        </select>
-                        <select value={repMonth} onChange={(e) => setRepMonth(Number(e.target.value))} className="p-5 bg-white border-2 border-white rounded-[1.5rem] font-bold text-slate-700 outline-none">
-                          {Array.from({length: 12}, (_, i) => <option key={i+1} value={i+1}>{new Date(2000, i).toLocaleString('pt-BR', {month: 'long'})}</option>)}
-                        </select>
-                        <select value={repYear} onChange={(e) => setRepYear(Number(e.target.value))} className="p-5 bg-white border-2 border-white rounded-[1.5rem] font-bold text-slate-700 outline-none">
-                          {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                    </div>
-
-                    {consolidatedReport ? (
-                        <div className="space-y-8 animate-in fade-in">
-                          <div className="overflow-x-auto bg-slate-50 rounded-[3rem] p-4 border border-slate-100 shadow-inner">
-                              <table className="w-full text-xs text-left border-collapse">
-                                <thead>
-                                    <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                      <th className="p-4 border-b border-slate-200 sticky left-0 bg-slate-50 z-10 w-64">Aluno</th>
-                                      {consolidatedReport.allDates.map(date => (
-                                        <th key={date} className="p-4 border-b border-slate-200 text-center min-w-[60px]">
-                                          <div className="flex flex-col items-center">
-                                            <span>{date.split('-')[2]}/{date.split('-')[1]}</span>
-                                          </div>
-                                        </th>
-                                      ))}
-                                      <th className="p-4 border-b border-slate-200 text-right sticky right-0 bg-slate-50 z-10">Situação</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {consolidatedReport.studentsData.map(st => (
-                                      <tr key={st.id} className="border-b border-slate-100 hover:bg-white transition-colors">
-                                          <td className="p-4 font-bold text-slate-700 uppercase sticky left-0 bg-inherit z-10 shadow-[5px_0_5px_-2px_rgba(0,0,0,0.02)]">
-                                            {st.nome}
-                                          </td>
-                                          {consolidatedReport.allDates.map(date => {
-                                            const reg = st.registros.find(r => r.data === date);
-                                            return (
-                                              <td key={date} className="p-4 text-center border-l border-slate-100">
-                                                {reg?.status === 'P' ? '0' : reg?.status === 'F' ? '2' : reg?.status === 'J' ? 'J' : '-'}
-                                              </td>
-                                            );
-                                          })}
-                                          <td className="p-4 text-right font-black text-slate-400 sticky right-0 bg-inherit z-10">
-                                            {st.faltas > 0 ? (
-                                              <div className="bg-rose-50 text-rose-500 px-3 py-1 rounded-lg border border-rose-100 inline-block whitespace-nowrap">
-                                                  {st.faltas} falta(s) no diário
-                                              </div>
-                                            ) : '-'}
-                                          </td>
-                                      </tr>
-                                    ))}
-                                </tbody>
-                              </table>
-                          </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-24 bg-slate-50 rounded-[4rem] border-2 border-dashed border-slate-100">
-                          <p className="text-slate-300 font-black uppercase tracking-widest text-[10px]">Aguardando seleção de turma...</p>
-                        </div>
-                    )}
-                  </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* MODAIS COMPARTILHADOS */}
+
+        {/* Modal Seleção de Alunos Pendentes / Desvinculados (Usado dentro da View Turma) */}
+        {isEnrollListOpen && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+                <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
+                    <div className="p-10 border-b border-slate-50 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Estudante</h3>
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Alunos desvinculados de qualquer turma</p>
+                        </div>
+                        <button onClick={() => setIsEnrollListOpen(false)} className="p-4 bg-slate-50 text-slate-300 rounded-3xl hover:text-rose-500 transition-all order-first md:order-last self-end md:self-center"><X size={24} /></button>
+                    </div>
+                    
+                    <div className="px-10 py-6 border-b border-slate-50">
+                      <div className="relative">
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                        <input 
+                            placeholder="Buscar aluno desvinculado..." 
+                            className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl outline-none font-bold text-slate-600 focus:bg-white transition-all" 
+                            value={searchEnroll} 
+                            onChange={(e) => setSearchEnroll(e.target.value)} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-8 max-h-[50vh] overflow-y-auto space-y-3">
+                        {filteredEnrollList.map(aluno => (
+                            <button 
+                                key={aluno.id}
+                                onClick={() => handleEnrollExisting(aluno.id)}
+                                className="w-full flex items-center justify-between p-5 bg-slate-50 hover:bg-indigo-50 rounded-[2.5rem] border border-transparent hover:border-indigo-100 transition-all group"
+                            >
+                                <div className="flex items-center gap-5">
+                                    <img src={aluno.fotoUrl} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" />
+                                    <div className="text-left">
+                                        <p className="font-black text-slate-800 uppercase leading-none">{aluno.nome}</p>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Responsável: {aluno.responsavel}</p>
+                                    </div>
+                                </div>
+                                <div className="p-3 bg-white text-indigo-500 rounded-xl shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                    <Plus size={18} strokeWidth={3} />
+                                </div>
+                            </button>
+                        ))}
+                        {filteredEnrollList.length === 0 && (
+                          <div className="text-center py-16">
+                            <AlertCircle size={40} className="mx-auto text-slate-200 mb-4" />
+                            <p className="text-slate-300 font-black uppercase tracking-widest text-[10px]">
+                              {searchEnroll ? 'Nenhum aluno desvinculado encontrado' : 'Não há alunos desvinculados disponíveis'}
+                            </p>
+                          </div>
+                        )}
+                    </div>
+                    <div className="p-8 bg-slate-50 text-center">
+                        <button onClick={() => { setIsEnrollListOpen(false); setActiveTab('alunos'); openModal(); }} className="text-[10px] font-black text-indigo-500 uppercase tracking-widest hover:underline">+ Cadastrar novo aluno e vincular aqui</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Modal de Transferência / Vincular Direto */}
+        {isTransferModalOpen && studentToTransfer && (
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
+            <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
+              <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
+                 <div>
+                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Estudante</h3>
+                    <p className="text-sm font-bold text-indigo-500 mt-1">{studentToTransfer.nome}</p>
+                 </div>
+                 <button onClick={() => setIsTransferModalOpen(false)} className="p-4 bg-white text-slate-300 rounded-3xl shadow-sm"><X size={24} /></button>
+              </div>
+              <form onSubmit={handleTransferSubmit} className="p-12 space-y-8">
+                 <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Selecione a Turma de Destino</label>
+                    <select name="targetTurmaId" className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:border-indigo-100 transition-all appearance-none cursor-pointer">
+                        <option value="">Manter Desvinculado</option>
+                        {classes.map(t => <option key={t.id} value={t.id}>{t.nome} ({t.periodo})</option>)}
+                    </select>
+                 </div>
+                 <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black uppercase text-xs tracking-[0.2em] rounded-3xl shadow-xl shadow-indigo-100 active:scale-95 transition-all">Confirmar Matrícula</button>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Modal de Cadastro/Edição Geral */}
         {isModalOpen && (
@@ -555,7 +577,7 @@ const SecretaryDashboard: React.FC = () => {
                           </div>
                           <div className="space-y-2">
                              <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Período</label>
-                             <select name="periodo" defaultValue={editingItem?.periodo || 'Manhã'} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white transition-all shadow-inner appearance-none">
+                             <select name="periodo" defaultValue={editingItem?.periodo || 'Manhã'} className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-[1.5rem] font-bold text-slate-700 outline-none focus:bg-white transition-all shadow-inner appearance-none cursor-pointer">
                                 <option value="Manhã">Manhã</option>
                                 <option value="Tarde">Tarde</option>
                                 <option value="Integral">Integral</option>
@@ -568,66 +590,6 @@ const SecretaryDashboard: React.FC = () => {
                     <button type="button" onClick={closeModal} className="flex-1 py-5 bg-slate-50 text-slate-400 font-black uppercase text-[10px] rounded-3xl active:scale-95 transition-all hover:bg-slate-100">Cancelar</button>
                     <button type="submit" className="flex-1 py-5 sky-gradient text-white font-black uppercase text-[10px] rounded-3xl shadow-xl shadow-blue-100 active:scale-95 transition-all">Salvar</button>
                  </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal Seleção de Alunos Pendentes (Turma View) */}
-        {isEnrollListOpen && (
-            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-                <div className="bg-white w-full max-w-2xl rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
-                    <div className="p-10 border-b border-slate-50 flex justify-between items-center">
-                        <div>
-                            <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Estudante</h3>
-                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Apenas alunos pendentes de matrícula</p>
-                        </div>
-                        <button onClick={() => setIsEnrollListOpen(false)} className="p-4 bg-slate-50 text-slate-300 rounded-3xl hover:text-rose-500 transition-all"><X size={24} /></button>
-                    </div>
-                    <div className="p-8 max-h-[60vh] overflow-y-auto space-y-3">
-                        {pendingStudents.map(aluno => (
-                            <button 
-                                key={aluno.id}
-                                onClick={() => handleEnrollExisting(aluno.id)}
-                                className="w-full flex items-center justify-between p-5 bg-slate-50 hover:bg-indigo-50 rounded-[2.5rem] border border-transparent hover:border-indigo-100 transition-all group"
-                            >
-                                <div className="flex items-center gap-5">
-                                    <img src={aluno.fotoUrl} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow-sm" />
-                                    <div className="text-left">
-                                        <p className="font-black text-slate-800 uppercase leading-none">{aluno.nome}</p>
-                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Responsável: {aluno.responsavel}</p>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-white text-indigo-500 rounded-xl shadow-sm group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                                    <Plus size={18} strokeWidth={3} />
-                                </div>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* Modal Transferência / Vinculação */}
-        {isTransferModalOpen && studentToTransfer && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xl animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-[4rem] shadow-2xl overflow-hidden p-1 modal-animate-in">
-              <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-                 <div>
-                    <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Vincular Turma</h3>
-                    <p className="text-sm font-bold text-indigo-500 mt-1">{studentToTransfer.nome}</p>
-                 </div>
-                 <button onClick={() => setIsTransferModalOpen(false)} className="p-4 bg-white text-slate-300 rounded-3xl shadow-sm"><X size={24} /></button>
-              </div>
-              <form onSubmit={handleTransferSubmit} className="p-12 space-y-8">
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Selecione o Destino</label>
-                    <select name="targetTurmaId" className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-[2rem] font-bold text-slate-700 outline-none focus:border-indigo-100 transition-all appearance-none">
-                        <option value="">Deixar pendente de matrícula</option>
-                        {classes.map(t => <option key={t.id} value={t.id}>{t.nome} ({t.periodo})</option>)}
-                    </select>
-                 </div>
-                 <button type="submit" className="w-full py-6 bg-indigo-600 text-white font-black uppercase text-xs tracking-[0.2em] rounded-3xl shadow-xl shadow-indigo-100 active:scale-95 transition-all">Confirmar Vinculação</button>
               </form>
             </div>
           </div>
